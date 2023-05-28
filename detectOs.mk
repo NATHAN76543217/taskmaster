@@ -4,48 +4,48 @@
 # 
 # Supported os: OSX WIN32 LINUX UNKNOWN
 # 
-# Fill OSDETECT with the detected os.
+# Fill OS_DETECTED with the detected os.
 # Fill COMP with the adequate compilator (Support gcc && clang)
-# Append -D$(OSDETECT) to the CFLAGS var
+# Append -D$(OS_DETECTED) to the CPP_CMP_FLAGS var
 #
 
 ifeq ($(OS),Windows_NT)
-    OSDETECT		=	WIN32
-	CFLAGS			+=	-DWIN32
+    OS_DETECTED		=	WIN32
+	CPP_CMP_FLAGS	+=	-DWIN32
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
-        OSDETECT	=	LINUX
+        OS_DETECTED			=	LINUX
+		CPP_CMP_FLAGS		+=	-D$(OS_DETECTED) -std=gnu11  
 	    ifeq ($(LANG),C)
 			COMP		=	gcc
 		else ifeq ($(LANG),C++)
 			COMP		=	g++
 		endif
-		CFLAGS			+=	-D$(OSDETECT) -std=gnu11  
     else ifeq ($(UNAME_S),Darwin)
-        OSDETECT 	=	OSX
+        OS_DETECTED 		=	OSX
+		CPP_CMP_FLAGS		+=	-D$(OS_DETECTED)
 		ifeq ($(LANG),C)
 			COMP		=	clang
 		else ifeq ($(LANG),C++)
 			COMP		=	clang++
 		endif
-		CFLAGS			+=	-D$(OSDETECT)
 	else
-		OSDETECT	=	UNKNOWN
+		OS_DETECTED	=	UNKNOWN
 		COMP		=	gcc
     endif
 endif
 
 
 display_os:
-ifeq ($(OSDETECT),WIN32)
+ifeq ($(OS_DETECTED),WIN32)
 	@echo "$(PREFIX_ERROR) This project cannot be compiled on windows"
 	@exit 1
-else ifeq ($(OSDETECT), UNKNOWN)
+else ifeq ($(OS_DETECTED), UNKNOWN)
 	@echo "$(PREFIX_ERROR) Unknown OS detected. Aborting."
 	@exit 1
 else
-	@echo "$(PREFIX_INFO) Detected OS: $(OSDETECT)"
+	@echo "$(PREFIX_INFO) OS detected: $(OS_DETECTED)"
 endif
 
 
