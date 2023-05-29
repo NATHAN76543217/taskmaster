@@ -45,6 +45,7 @@ A la reception d'un signal `SIGHUP` le serveur doit recharger le fichier de conf
 > Load a new config file    
 > Check diff between new and old configs     
 > Apply this list of differences to update the server     
+> Encrypted when stored on the victim? 
 
 Le fichier de config doit définir l'ensemble des JOB qui seront lancé mais on peut aussi l'utiliser pour parametrer le serveur lui-même.
 
@@ -89,9 +90,14 @@ programs:
 #### Logging
 Nous devons aussi enregistrer tout les évenements notables du gestionnaire de taches dans un fichier de log.     
 Pour les bonus il nous faut un canal pour exfiltrer les logs (email, http, syslog etc...)    
-
+> timestamp customisable
+> debug level customisable
+> Ecrire dans un ou plusieurs fichier de log
+> Envoi des log par un canal
 #### Secure connecetion
 Connection to the server must be encrypted by TLS.
+IMPROVE Connections must be through a VPN
+IMPROVE Connections must be relayed by the TOR network
 
 ##### TM commands
 Four commands must be implemented.
@@ -154,7 +160,7 @@ Must be restricted to only one instance with a file named `/var/lock/matt_daemon
 
 > Max 3 simultaneous connections
 
-> On signal, log it and quit properly
+> On signal, log it to logfile and quit properly
 
 With bonuses
 > Root shell remote access with command `shell`
@@ -194,6 +200,9 @@ Add all cool stuff
 
 > add woodyWoodpacker functionalities to hide the executable
 
+> hide trojan with steganography in an image? 
+
+> implement multipe ways for the trojan to hide
 
 # Code
 

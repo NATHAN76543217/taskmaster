@@ -1,4 +1,9 @@
 server:
+    pwd: /tmp
+    logpath: /var/log/matt_daemon
+    lockpath: /var/lock/matt_daemon.lock
+    max_connections: 3
+    
 programs:
     nginx:
         cmd: "/usr/local/bin/nginx -c /etc/nginx/test.conf"
