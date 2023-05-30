@@ -17,12 +17,13 @@ class Config
 
 		Config &		operator=( Config const & rhs );
 		
-		void			loadConfigFile( void );
-		void			loadConfigFile( const std::string & path = "");
+		int					reloadConfigFile( void );
+		int					loadConfigFile( const std::string & path = "");
+		const std::string	&getPath( void ) const;
 
 	private:
 		std::string		_pathConfigFile;
-		std::string		_isReadOnly;
+		bool			_isReadOnly;
 
 };
 

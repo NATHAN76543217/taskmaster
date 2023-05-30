@@ -64,7 +64,7 @@
 // # define LOG_MANUAL(level, category, file, log) getLogManager().level(level).category(category).tofile(file).log(log);
 # define LOG_DEBUG(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(log_message));
 # define LOG_INFO(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(log_message));
-# define LOG_WARNING(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
+# define LOG_WARN(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
 # define LOG_ERROR(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
 # define LOG_CRITICAL(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
 

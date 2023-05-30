@@ -1,23 +1,27 @@
-# include "taskmaster.hpp"
+# include "Taskmaster.hpp"
 
 //TODO implement logging to files
-//TODO Finish to well format the LOGs
+//DONE Finish to well format the LOGs
+//DONE Reload config file on SIGHUP
 //TODO Implement yamlLib and start parsing config file
 //TODO for logger implement defaultDestination for default output file
 
-int	parse_arguments( void )
-{
-	return EXIT_SUCCESS;
-}
+
 
 
 void	signal_handler(int signal)
 {
-	dprintf(STDERR_FILENO, "Signal caught !!!\n");
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "Signal catched" + ntos(signal))
-	exit(0);
+
+	LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Signal °" + ntos(signal) + " catched.")
+	if (signal == SIGHUP)
+	{
+		LOG_WARN(LOG_CATEGORY_CONFIG, "SIGHUP received: Reload config")
+		Taskmaster::GetInstance()->reloadConfigFile();
+	}
+	// exit(0);
 }
 
+//TODO
 // 		static void			initLogfile(const std::string & filename );
 // void		Logger::initLogfile(const std::string & filename )
 // {
@@ -52,6 +56,7 @@ int	init_signals(struct sigaction *sa)
 	// sigaddset(&sa.sa_mask, SIGINT);
 	// sigprocmask(&sa.sa_mask);
 	sigaction(SIGINT, sa, NULL);
+	sigaction(SIGHUP, sa, NULL);
 	// if (signal(SIGQUIT, signal_handler) == SIG_ERR)
 		// return EXIT_FAILURE;
 	// if (signal(SIGINT, signal_handler) == SIG_ERR)
@@ -72,23 +77,18 @@ int	check_root_permissions()
 
 
 // TODO ptrace on ourselves to avoid process monitoring
-void initLogger( void )
-{
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_DEFAULT);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
-}
+
 
 int main(int ac, char** av)
 {
 	(void)ac;
 	(void)av;
 	struct sigaction sa;
+	Taskmaster *TM = Taskmaster::GetInstance();
+
 
 #if LOG_CATEGORY_AUTO == false
-	initLogger();
+	TM->initCategories();
 #endif
 
 	LOG_INFO(LOG_CATEGORY_DEFAULT, "PID: " + ntos(getpid()))
@@ -96,12 +96,12 @@ int main(int ac, char** av)
 	if (check_root_permissions() != EXIT_SUCCESS)
 	{
 		LOG_DEBUG(LOG_CATEGORY_INIT, "You must haved to run this program.")
-		LOG_WARNING(LOG_CATEGORY_DEFAULT, "You must have root permissions to run this program.")
+		LOG_WARN(LOG_CATEGORY_DEFAULT, "You must have root permissions to run this program.")
 		LOG_ERROR(LOG_CATEGORY_INIT, "You must have root pdsffsdfsdsdfssfdermissions to run this program.")
 		LOG_CRITICAL(LOG_CATEGORY_NETWORK, "A big network error have root pdsffsdfsdsdfssfdermissions to run this program.")
 		return EXIT_FAILURE;
 	}
-	if (parse_arguments() != EXIT_SUCCESS)
+	if (TM->parse_arguments() != EXIT_SUCCESS)
 	{
 		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to parse arguments.")
 		return EXIT_FAILURE;
@@ -111,17 +111,19 @@ int main(int ac, char** av)
 		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to init signal handlers.")
 		return EXIT_FAILURE;
 	}
-	Config  conf;
 
-	conf.loadConfigFile("config_template.yaml");
-	conf.loadConfigFile("test.yml");
+	TM->loadConfigFile("config_template.yaml");
+	// TM->loadConfigFile("test.yml");
 	
 	// Here start to daemonize
 	int i = 0;
-	while (i < 40000)
+	while (i < 60000)
 	{
 		usleep(100);
 		i++;
 	}
+
+	LOG_INFO(LOG_CATEGORY_INIT, "After the loop")
+
 	return EXIT_SUCCESS;
 }

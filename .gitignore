@@ -1,8 +1,9 @@
 # Custom
+test.yml
 lib/
 taskmaster
 taskmaster.code-workspace
-
+.vscode
 # Prerequisites
 *.d
 

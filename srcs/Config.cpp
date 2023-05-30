@@ -4,7 +4,7 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-Config::Config()
+Config::Config() : _pathConfigFile(""), _isReadOnly(true)
 {
 }
 
@@ -50,27 +50,43 @@ std::ostream &			operator<<( std::ostream & o, Config const & i )
 ** --------------------------------- METHODS ----------------------------------
 */
 
-void					Config::loadConfigFile()
-{
 
-}
 
-void					Config::loadConfigFile( const std::string & path)
+int					Config::loadConfigFile( const std::string & path)
 {
 	YAML::Node config = YAML::LoadFile(path);
 	if (config.size() == 0)
 	{
 		LOG_ERROR(LOG_CATEGORY_CONFIG, "Empty configuration file")
-		return ;
+		return EXIT_FAILURE;
 	}
+	this->_pathConfigFile = path;
 	LOG_INFO(LOG_CATEGORY_CONFIG, "Configuration file loaded.")
 
-	std::cout << config << std::endl;
+	LOG_DEBUG(LOG_CATEGORY_CONFIG, "Loaded config = \n" + ntos(config))
+	return EXIT_SUCCESS;
+}
+
+
+int						Config::reloadConfigFile( void )
+{
+	if (this->_pathConfigFile.empty())
+	{
+		LOG_ERROR(LOG_CATEGORY_CONFIG, "No config path loaded yet.")
+		return EXIT_FAILURE;
+	}	
+	this->loadConfigFile(this->_pathConfigFile);
+	return EXIT_SUCCESS;
 }
 
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
 */
+
+const std::string&		Config::getPath( void ) const
+{
+	return this->_pathConfigFile;
+}
 
 
 /* ************************************************************************** */

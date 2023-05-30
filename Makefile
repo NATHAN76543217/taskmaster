@@ -27,7 +27,7 @@ LOG_DIR		= logs
 SRCS_SERVER		=	main.cpp Tintin_reporter.cpp Config.cpp
 SRCS_CLIENT		=	main.cpp
  
-HEADERS			=	taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
+HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
 
 LIBRARIES	=	argparse
 
