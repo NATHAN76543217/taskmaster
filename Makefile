@@ -24,15 +24,15 @@ LOG_DIR		= logs
 # - fill only with name of the file
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
-SRCS_SERVER		=	main.cpp Tintin_reporter.cpp
+SRCS_SERVER		=	main.cpp Tintin_reporter.cpp Config.cpp
 SRCS_CLIENT		=	main.cpp
  
-HEADERS			=	taskmaster.hpp Tintin_reporter.hpp ntos.hpp
+HEADERS			=	taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
 
 LIBRARIES	=	argparse
 
 
-# LIBFT_PATH		=	$(LIB_DIR)/libft
+LIBFT_PATH		=	$(LIB_DIR)/libft
 # ARGPARSE_PATH	=	$(LIB_DIR)/argparse
 
 CPP_DBG_FLAGS		=	#-g3 -fsanitize=address
@@ -58,7 +58,7 @@ include fancyPrefix.mk
 include detectOs.mk
 
 #   Main rule
-all: gitinit yaml openssl display_os comp_lib check_sources check_headers $(NAME)
+all: display_os gitinit install_yaml_library openssl comp_lib check_sources check_headers $(NAME)
 	@ echo "$(PREFIX_INFO) all done."
 
 #	check_sources :
@@ -99,27 +99,49 @@ check_headers:
 
 # YAML library
 
-YAML_LIB_VERSION	=	0.2.5
-YAML_LIB_PATH 		=	lib/yaml/
-CPP_LNK_FLAGS		+=	-lyaml -L $(YAML_LIB_PATH)
+YAML_LIB_VERSION	=	0.7.0
+YAML_LIB_PATH 		=	$(LIB_DIR)/yaml/
+CPP_INC_FLAGS		+=	-I $(YAML_LIB_PATH)/include
+CPP_LNK_FLAGS		+=	-L $(YAML_LIB_PATH)/build -lyaml-cpp 
+
+# install_yaml_library:
+# 	@echo "$(PREFIX_INFO) Installation de la lib YAML..."
+# 	@mkdir -p $(YAML_LIB_PATH)
+# 	@cd $(YAML_LIB_PATH) \
+# 		&& wget https://pyyaml.org/download/libyaml/yaml-$(YAML_LIB_VERSION).tar.gz -O yaml.tar.gz $(VOIDED) \
+# 		&& tar -xvf yaml.tar.gz $(VOIDED) \
+# 		&& cd yaml-$(YAML_LIB_VERSION) \
+# 		&& ./configure $(VOIDED) \
+# 		&& make $(VOIDED) \
+# 		&& make install $(VOIDED)
+# 	@echo "$(PREFIX_INFO) Installation de la lib YAML done !"
+# uninstall_yaml_library:
+# 	@echo "$(PREFIX_INFO) Desinstallation de la lib YAML..."
+# 	@ cd $(YAML_LIB_PATH) \
+# 		&& cd yaml-$(YAML_LIB_VERSION) \
+# 		&& make uninstall $(VOIDED)
+# 	@ rm -rf $(YAML_LIB_PATH)
+# 	@ echo "$(PREFIX_INFO) Desinstallation de la lib YAML done !"
 
 install_yaml_library:
 	@echo "$(PREFIX_INFO) Installation de la lib YAML..."
-	@mkdir -p $(YAML_LIB_PATH)
-	@cd $(YAML_LIB_PATH) \
-		&& wget https://pyyaml.org/download/libyaml/yaml-$(YAML_LIB_VERSION).tar.gz -O yaml.tar.gz $(VOIDED) \
-		&& tar -xvf yaml.tar.gz $(VOIDED) \
-		&& cd yaml-$(YAML_LIB_VERSION) \
-		&& ./configure $(VOIDED) \
-		&& make $(VOIDED) \
-		&& make install $(VOIDED)
+	@ wget -q https://github.com/jbeder/yaml-cpp/archive/refs/tags/yaml-cpp-$(YAML_LIB_VERSION).tar.gz -O $(LIB_DIR)/yaml.gz
+	@cd $(LIB_DIR) \
+		&& tar -xf yaml.gz \
+		&& mv yaml-cpp-yaml-cpp-$(YAML_LIB_VERSION) yaml
+	@ cd $(YAML_LIB_PATH) \
+		&& mkdir -p build \
+		&& cd build \
+		&& cmake .. \
+		&& make
+# && make install
+	@ rm -rf $(LIB_DIR)/yaml.gz
 	@echo "$(PREFIX_INFO) Installation de la lib YAML done !"
 
 uninstall_yaml_library:
-	@echo "$(PREFIX_INFO) Desinstallation de la lib YAML..."
-	@ cd $(YAML_LIB_PATH) \
-		&& cd yaml-$(YAML_LIB_VERSION) \
-		&& make uninstall $(VOIDED)
+	@ echo "$(PREFIX_INFO) Desinstallation de la lib YAML..."
+# Remove everything from make install 
+# rm -rf /usr/local/lib/libyaml-cpp.a /usr/local/lib/libyaml-0.2.dylib /usr/local/lib/libyaml-cpp.a /usr/local/lib/libyaml.a /usr/local/lib/libyaml.dylib /usr/local/lib/libyaml.la /usr/local/include/yaml-cpp /usr/local/include/yaml.h /usr/local/share/cmake/yaml-cpp /usr/local/lib/cmake/GTest /usr/local/share/pkgconfig/yaml-cpp.pc /usr/local/include/gmock /usr/local/lib/libgmock.a /usr/local/lib/libgmock_main.a /usr/local/lib/pkgconfig/yaml-0.1.pc /usr/local/lib/pkgconfig/gmock.pc /usr/local/lib/pkgconfig/gmock_main.pc /usr/local/lib/libgtest.a /usr/local/lib/pkgconfig/gtest.pc /usr/local/lib/pkgconfig/gtest_main.pc /usr/local/include/gtest /usr/local/lib/libgtest_main.a
 	@ rm -rf $(YAML_LIB_PATH)
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib YAML done !"
 
@@ -132,7 +154,7 @@ OPENSSL_LIB_VERSION		=	1.1
 ifeq ($(OS_DETECTED),LINUX)
 	OPENSSL_LIB_PATH	=	/usr/
 else ifeq ($(UNAME_S),Darwin)
-	OPENSSL_LIB_PATH		=	$(shell brew --prefix openssl@$(OPENSSL_VERSION))
+	OPENSSL_LIB_PATH		=	$(shell brew --prefix openssl@$(OPENSSL_LIB_VERSION))
 endif
 # CPP_LNK_FLAGS			+=	-lssl -lcrypto -L $(OPENSSL_LIB_PATH)/lib/
 # CPP_INC_IFLAGS			+=	-I $(OPENSSL_LIB_PATH)/include
@@ -183,7 +205,7 @@ $(BIN_DIR)/$(SRC_DIR)/%.o : $(SRC_DIR)/%.cpp $(HEADER_FILES)
 	@ echo "$(PREFIX_COMP) Compiled: $(shell basename $<)"
 
 # clean rule
-clean:
+clean: uninstall_yaml_library
 	@ echo "$(PREFIX_CLEAN) Cleaning $(BIN_DIR)/"
 	@ rm -rf $(BIN_DIR)
 
@@ -199,9 +221,12 @@ re: fclean all
 
 # git submodule initialisation
 
+dependencies_init:
 gitinit:
-	@mkdir -p $(LIBFT_PATH)
+	@ mkdir -p $(LIBFT_PATH)
 	@find $(LIBFT_PATH) -maxdepth 0 -empty -type d -exec printf "$(PREFIX_WARN) The library directory is empty.\n$(PREFIX_WARN) Cloning library 'libft' into {}.\n" \; -exec git clone "https://github.com/NATHAN76543217/libft.git" {} \;
+	# @ mkdir -p $(YAML_LIB_PATH)
+	# @find $(YAML_LIB_PATH) -maxdepth 0 -empty -type d -exec printf "$(PREFIX_WARN) The library directory is empty.\n$(PREFIX_WARN) Cloning library 'yaml-cpp' into {}.\n" \; -exec git clone "https://github.com/jbeder/yaml-cpp.git" {} \;
 # @mkdir -p $(ARGPARSE_PATH)
 # @find $(ARGPARSE_PATH) -maxdepth 0 -empty -type d -exec printf "$(PREFIX_WARN) The library directory is empty. Cloning library 'argparse' into {}" \; -exec git clone "https://github.com/NATHAN76543217/argparse.git" {} \;
 

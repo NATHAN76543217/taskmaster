@@ -3,6 +3,7 @@
 //TODO implement logging to files
 //TODO Finish to well format the LOGs
 //TODO Implement yamlLib and start parsing config file
+//TODO for logger implement defaultDestination for default output file
 
 int	parse_arguments( void )
 {
@@ -17,10 +18,30 @@ void	signal_handler(int signal)
 	exit(0);
 }
 
+// 		static void			initLogfile(const std::string & filename );
+// void		Logger::initLogfile(const std::string & filename )
+// {
+// 	if (!filename.empty())
+// 	{
+// 		/* set a log file */
+// 		_logfile.open(filename, std::ofstream::out | std::ofstream::app);
+// 		if (_logfile.is_open() == false)
+// 			throw Logger::logFileException();
+// 		info("logfile (" + filename + ") initialisation done");
+// 	}
+// }
+//  public:
+// 		class	logFileException : std::exception
+// 		{
+// 			public:
+// 				virtual const char *what(void ) const throw()
+// 				{
+// 					return "Unable to open logfile";
+// 				}
+// 		};
 
 int	init_signals(struct sigaction *sa)
 {
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL);
 
 	memset(sa, 0, sizeof(struct sigaction));
 	// sa.sa_sigaction = signal_handler;
@@ -51,7 +72,14 @@ int	check_root_permissions()
 
 
 // TODO ptrace on ourselves to avoid process monitoring
-
+void initLogger( void )
+{
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_DEFAULT);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
+}
 
 int main(int ac, char** av)
 {
@@ -59,12 +87,18 @@ int main(int ac, char** av)
 	(void)av;
 	struct sigaction sa;
 
-	LOG_INFO(LOG_CATEGORY_DEFAULT, "PID: " + ntos(getpid()))
+#if LOG_CATEGORY_AUTO == false
+	initLogger();
+#endif
 
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "PID: " + ntos(getpid()))
+	
 	if (check_root_permissions() != EXIT_SUCCESS)
 	{
-		LOG_ERROR(LOG_CATEGORY_INIT, "You must have root permissions to run this program.")
+		LOG_DEBUG(LOG_CATEGORY_INIT, "You must haved to run this program.")
+		LOG_WARNING(LOG_CATEGORY_DEFAULT, "You must have root permissions to run this program.")
+		LOG_ERROR(LOG_CATEGORY_INIT, "You must have root pdsffsdfsdsdfssfdermissions to run this program.")
+		LOG_CRITICAL(LOG_CATEGORY_NETWORK, "A big network error have root pdsffsdfsdsdfssfdermissions to run this program.")
 		return EXIT_FAILURE;
 	}
 	if (parse_arguments() != EXIT_SUCCESS)
@@ -77,6 +111,11 @@ int main(int ac, char** av)
 		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to init signal handlers.")
 		return EXIT_FAILURE;
 	}
+	Config  conf;
+
+	conf.loadConfigFile("config_template.yaml");
+	conf.loadConfigFile("test.yml");
+	
 	// Here start to daemonize
 	int i = 0;
 	while (i < 40000)

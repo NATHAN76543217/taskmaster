@@ -1,6 +1,7 @@
 # Custom
 lib/
 taskmaster
+taskmaster.code-workspace
 
 # Prerequisites
 *.d

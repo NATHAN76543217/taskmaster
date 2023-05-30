@@ -59,11 +59,25 @@ void	Tintin_reporter::addCategory(const std::string & CategoryName)
 	if (CategoryName.size() > LOG_CATEGORY_NAME_MAXSIZE)
 		this->_categories[CategoryName].name = CategoryName.substr(0, LOG_CATEGORY_NAME_MAXSIZE);
 	else
-		this->_categories[CategoryName].name = CategoryName;
+	{
+		std::string newCategoryName(CategoryName);
+		
+		newCategoryName.append(LOG_CATEGORY_NAME_MAXSIZE - CategoryName.size(), ' ');
+		this->_categories[CategoryName].name = newCategoryName;
+	}
 }
 
 void	Tintin_reporter::log(uint level, const std::string & category, const std::string & message)
 {
+
+#if LOG_CATEGORY_AUTO == true
+
+	/* Create the category if don't already exist */
+	if (this->_categories.find(category) == this->_categories.end())
+		this->addCategory(category);
+
+#endif
+
 	switch (level)
     {
         case LOG_LEVEL_CRITICAL:
@@ -91,53 +105,58 @@ void	Tintin_reporter::log(uint level, const std::string & category, const std::s
 */
 
 
-
 void			Tintin_reporter::log_debug(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " " <<  LOG_LEVEL_DEBUG_MSG << " " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_DEBUG_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " [DEBUG] " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " [DEBUG] " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_info(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " " <<  LOG_LEVEL_INFO_MSG << " " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_INFO_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " [INFO] " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " [INFO] " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_warning(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " " <<  LOG_LEVEL_WARNING_MSG << " " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_WARNING_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " [WARNING] " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " [WARNING] " << message << RESET_ANSI << std::endl;
 }
 
 
 void			Tintin_reporter::log_error(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " " <<  LOG_LEVEL_ERROR_MSG << " " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_ERROR_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " [ERROR] " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " [ERROR] " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_critical(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " " <<  LOG_LEVEL_CRITICAL_MSG << " " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_CRITICAL_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getTimestamp() << " " << this->_categories.at(category).name << " [CRITICAL] " << message << RESET_ANSI << std::endl;
+		std::cout << this->getLogHead(category) << " [CRITICAL] " << message << RESET_ANSI << std::endl;
 }
 
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
 */
 
-std::string	Tintin_reporter::getTimestamp( void )
+const std::string Tintin_reporter::getLogHead(const std::string & category) const
+{
+	return this->getTimestamp() + " " + this->_categories.at(category).name;
+}
+
+
+std::string	Tintin_reporter::getTimestamp( void ) const
 {
     struct timeval		time_now;
 	std::stringstream	ss;
@@ -155,7 +174,7 @@ std::string	Tintin_reporter::getTimestamp( void )
 }
 
 
-std::string				Tintin_reporter::timeToString( const struct timeval & time )
+std::string				Tintin_reporter::timeToString( const struct timeval & time ) const
 {
 	char		buffer[80];
 	struct tm*	timeinfo;

@@ -1,4 +1,4 @@
-# ifndef TASKMASTER_HPP
+#ifndef TASKMASTER_HPP
 # define TASKMASTER_HPP
 
 # include <cstdlib>
@@ -6,6 +6,8 @@
 # include <cstdio>
 # include <signal.h>
 
+# include "yaml-cpp/yaml.h"
+# include "Config.hpp"
 # include "Tintin_reporter.hpp"
 
 
