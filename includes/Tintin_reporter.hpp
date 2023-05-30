@@ -1,8 +1,9 @@
 #ifndef TINTIN_REPORTER_HPP
 # define TINTIN_REPORTER_HPP
 
-# include <iostream>
 # include <iomanip>
+# include <iostream>
+# include <fstream>
 # include <string>
 # include <map>
 # include <sys/time.h>
@@ -68,35 +69,45 @@
 # define LOG_ERROR(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
 # define LOG_CRITICAL(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
 
+# define LOG_TIMESTAMP_DEFAULT 0
+
 class Tintin_reporter
 {
 	private:
-		Tintin_reporter();
+		Tintin_reporter(const std::string & defaultFile);
 		~Tintin_reporter();
-		static Tintin_reporter*		_logManager;
-		uint						_timestamp_format;
-		uint						_color_enabled;
-		// uint						nb_categories;
+		
 		class Category
 		{
 			public:
 				Category() {};
 				~Category() {};
-				std::string name;
+				std::string		name;
+				std::string		filename;
 			//add FD
 		};
 
-		std::map<std::string, Category> _categories;
+		static Tintin_reporter*					_logManager;
+		std::map<std::string, std::ofstream*>	_opened_files;
+		std::map<std::string, Category>			_categories;
+
+		std::string					_defaultFile;
+		uint						_timestamp_format;
+		uint						_color_enabled;
+		// uint						nb_categories;
+
 
 	public:
 
-		Tintin_reporter( Tintin_reporter const & src );
+		Tintin_reporter( Tintin_reporter & src ) = delete;
+		Tintin_reporter( Tintin_reporter const & src ) = delete;
 
-		Tintin_reporter &		operator=( Tintin_reporter const & rhs );
+		Tintin_reporter &		operator=( Tintin_reporter const & rhs ) = delete;
 
-		static Tintin_reporter& getLogManager() {
+
+		static Tintin_reporter& getLogManager(const std::string & defaultFile = "") {
 			if (_logManager == nullptr) {
-				_logManager = new Tintin_reporter();
+				_logManager = new Tintin_reporter(defaultFile);
 			}
 			return *_logManager;
 		}
@@ -107,10 +118,11 @@ class Tintin_reporter
 				delete _logManager;
 		}
 
+
 		void			log(uint level, const std::string & category, const std::string & message);
 		std::string		getTimestamp( void ) const;
 		std::string		timeToString( const struct timeval & time ) const;
-		void			addCategory(const std::string & str);
+		int				addCategory(const std::string & str, std::string outfile = "");
 
 		void			log_critical(const std::string & category, const std::string & message);
 		void			log_error(const std::string & category, const std::string & message);

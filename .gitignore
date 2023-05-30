@@ -4,6 +4,7 @@ lib/
 taskmaster
 taskmaster.code-workspace
 .vscode
+*.log
 # Prerequisites
 *.d
 

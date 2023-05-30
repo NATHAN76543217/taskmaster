@@ -13,17 +13,20 @@
 # include "Config.hpp"
 # include "Tintin_reporter.hpp"
 
+# define TM_DEF_MAX_CONNECTIONS 3
+# define TM_DEF_LOGPATH "/var/log/taskmaster/taskmaster.log"
+
 class Taskmaster
 {
 	private:
 		std::string	_logpath;
 		uint		_max_connections;
-		Config _config;
+		Config		_config;
 
 	protected:
-		Taskmaster() : _logpath("/var/log/taskmaster/")
+		Taskmaster() : _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS)
 		{
-
+			(void) _max_connections;
 		}
 		~Taskmaster() {}
 
@@ -70,10 +73,10 @@ class Taskmaster
 
 void		Taskmaster::initCategories( void ) const
 {
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_DEFAULT);
+	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
 }
 
@@ -86,7 +89,7 @@ int			Taskmaster::loadConfigFile(const std::string & path)
 {
 	if (this->_config.loadConfigFile(path) == EXIT_FAILURE)
 	{
-		return EXIT_FAILURE
+		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;
 }

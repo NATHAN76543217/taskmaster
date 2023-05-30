@@ -6,17 +6,20 @@ Tintin_reporter*			Tintin_reporter::_logManager = nullptr;
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 
-Tintin_reporter::Tintin_reporter() : _timestamp_format(0), _color_enabled(true)
+Tintin_reporter::Tintin_reporter(const std::string & defaultFile) : 
+_defaultFile(defaultFile), 
+_timestamp_format(0), 
+_color_enabled(true)
 {
-	this->addCategory(LOG_CATEGORY_DEFAULT);
+	this->addCategory(LOG_CATEGORY_DEFAULT, defaultFile);
 }
 
-Tintin_reporter::Tintin_reporter( const Tintin_reporter & src ) : 
-_timestamp_format(src._timestamp_format),
-_color_enabled(src._color_enabled)
-{
-	(void) src;
-}
+// Tintin_reporter::Tintin_reporter( const Tintin_reporter & src ) : 
+// _timestamp_format(src._timestamp_format),
+// _color_enabled(src._color_enabled)
+// {
+// 	(void) src;
+// }
 
 
 /*
@@ -25,6 +28,14 @@ _color_enabled(src._color_enabled)
 
 Tintin_reporter::~Tintin_reporter()
 {
+	LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Closing all output files.")
+	for (std::map<std::string, std::ofstream*>::iterator it = this->_opened_files.begin();
+		it != this->_opened_files.end();
+		it++) 
+	{
+		it->second->close();
+		delete it->second;
+	}
 }
 
 
@@ -32,15 +43,15 @@ Tintin_reporter::~Tintin_reporter()
 ** --------------------------------- OVERLOAD ---------------------------------
 */
 
-Tintin_reporter &				Tintin_reporter::operator=( Tintin_reporter const & rhs )
-{
-	(void) rhs;
-	//if ( this != &rhs )
-	//{
-		//this->_value = rhs.getValue();
-	//}
-	return *this;
-}
+// Tintin_reporter &				Tintin_reporter::operator=( Tintin_reporter const & rhs )
+// {
+// 	(void) rhs;
+// 	//if ( this != &rhs )
+// 	//{
+// 		//this->_value = rhs.getValue();
+// 	//}
+// 	return *this;
+// }
 
 std::ostream &			operator<<( std::ostream & o, Tintin_reporter const & i )
 {
@@ -54,7 +65,7 @@ std::ostream &			operator<<( std::ostream & o, Tintin_reporter const & i )
 ** --------------------------------- METHODS ----------------------------------
 */
 
-void	Tintin_reporter::addCategory(const std::string & CategoryName)
+int		Tintin_reporter::addCategory(const std::string & CategoryName, std::string outfile)
 {
 	if (CategoryName.size() > LOG_CATEGORY_NAME_MAXSIZE)
 		this->_categories[CategoryName].name = CategoryName.substr(0, LOG_CATEGORY_NAME_MAXSIZE);
@@ -65,6 +76,35 @@ void	Tintin_reporter::addCategory(const std::string & CategoryName)
 		newCategoryName.append(LOG_CATEGORY_NAME_MAXSIZE - CategoryName.size(), ' ');
 		this->_categories[CategoryName].name = newCategoryName;
 	}
+
+	if (outfile.empty())
+		outfile = this->_defaultFile;
+
+	this->_categories[CategoryName].filename = outfile;
+	
+	std::map<std::string, std::ofstream*>::iterator of = this->_opened_files.find(outfile);
+	if ( of == this->_opened_files.end() )
+	{
+		/* Output file don't exist*/
+		// this->_opened_files.insert( { outfile, outfile } );
+		of = this->_opened_files.insert(std::make_pair(outfile, new std::ofstream)).first;
+
+		// dprintf(1, "Create a new ofstream linked to nothing\n");
+	}
+
+	if (of->second->is_open() == false)
+	{
+		/* ofstream exist but is closed */
+		of->second->open(outfile, std::ofstream::app);
+		if (of->second->fail() )
+		{
+			/* Fail to open file */
+			// LOG_ERROR(LOG_CATEGORY_DEFAULT, "Failed to open file '" + outfile + "'.")
+			return EXIT_FAILURE;
+		}
+		// LOG_DEBUG(LOG_CATEGORY_DEFAULT, "File '" + outfile + "' opened successfuly.")
+	}
+	return EXIT_SUCCESS;
 }
 
 void	Tintin_reporter::log(uint level, const std::string & category, const std::string & message)
@@ -108,42 +148,42 @@ void	Tintin_reporter::log(uint level, const std::string & category, const std::s
 void			Tintin_reporter::log_debug(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_DEBUG_MSG << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_DEBUG_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getLogHead(category) << " [DEBUG] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [DEBUG] " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_info(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_INFO_MSG << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_INFO_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getLogHead(category) << " [INFO] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [INFO] " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_warning(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_WARNING_MSG << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_WARNING_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getLogHead(category) << " [WARNING] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [WARNING] " << message << RESET_ANSI << std::endl;
 }
 
 
 void			Tintin_reporter::log_error(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_ERROR_MSG << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_ERROR_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getLogHead(category) << " [ERROR] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [ERROR] " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_critical(const std::string & category, const std::string & message)
 {
 	if (this->_color_enabled)
-		std::cout << this->getLogHead(category) << " " << LOG_LEVEL_CRITICAL_MSG << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_CRITICAL_MSG << message << RESET_ANSI << std::endl;
 	else
-		std::cout << this->getLogHead(category) << " [CRITICAL] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [CRITICAL] " << message << RESET_ANSI << std::endl;
 }
 
 /*
@@ -165,10 +205,13 @@ std::string	Tintin_reporter::getTimestamp( void ) const
 
 	std::string ms(ntos(time_now.tv_usec));
 	ms.resize(3);
-	if (this->_color_enabled)
-		ss << "[" << LOG_TIMESTAMP_COLOR << timeToString(time_now) << ":" << ms << RESET_ANSI"]";
-	else
-		ss << "[" << timeToString(time_now) << ":" << ms << "]";
+	if (this->_timestamp_format == LOG_TIMESTAMP_DEFAULT)
+	{
+		if (this->_color_enabled)
+			ss << "[" << LOG_TIMESTAMP_COLOR << timeToString(time_now) << ":" << ms << RESET_ANSI"]";
+		else
+			ss << "[" << timeToString(time_now) << ":" << ms << "]";
+	}
 	return ss.str();
 
 }
