@@ -26,6 +26,11 @@ Config::~Config()
 ** --------------------------------- OVERLOAD ---------------------------------
 */
 
+YAML::Node					Config::operator[]( const std::string & keyword )
+{
+	return this->_config[keyword];
+}
+
 Config &				Config::operator=( Config const & rhs )
 {
 	(void) rhs;
@@ -54,8 +59,8 @@ std::ostream &			operator<<( std::ostream & o, Config const & i )
 
 int					Config::loadConfigFile( const std::string & path)
 {
-	YAML::Node config = YAML::LoadFile(path);
-	if (config.size() == 0)
+	this->_config = YAML::LoadFile(path);
+	if (this->_config.size() == 0)
 	{
 		LOG_ERROR(LOG_CATEGORY_CONFIG, "Empty configuration file")
 		return EXIT_FAILURE;
@@ -63,7 +68,7 @@ int					Config::loadConfigFile( const std::string & path)
 	this->_pathConfigFile = path;
 	LOG_INFO(LOG_CATEGORY_CONFIG, "Configuration file loaded.")
 
-	LOG_DEBUG(LOG_CATEGORY_CONFIG, "Loaded config = \n" + ntos(config))
+	LOG_DEBUG(LOG_CATEGORY_CONFIG, "Loaded config = \n" + ntos(this->_config))
 	return EXIT_SUCCESS;
 }
 

@@ -15,6 +15,7 @@
 # include "Tintin_reporter.hpp"
 
 # define TM_DEF_MAX_CONNECTIONS 3
+# define TM_DEF_CONFIGPATH "./config_template.yaml"
 # define TM_DEF_LOCKPATH "./test.lock"
 // # define TM_DEF_LOCKPATH "/var/lock/taskmaster.lock"
 # define TM_DEF_LOGPATH "/var/log/taskmaster/taskmaster.log"
@@ -23,6 +24,7 @@ class Taskmaster
 {
 	private:
 		std::string	_lockpath;
+		bool		_logcolor;
 		std::string	_logpath;
 		uint		_max_connections;
 		pid_t		_pid;
@@ -97,7 +99,7 @@ void		Taskmaster::takeLockFile( void ) const
 		//TODO exit properly
 		exit(1);
 	}
-	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "'successfuly taken.");
+	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly taken.");
 	close(fd);
 }
 
@@ -134,6 +136,14 @@ int			Taskmaster::loadConfigFile(const std::string & path)
 	{
 		return EXIT_FAILURE;
 	}
+	if (this->_config["server"])
+	{
+		if (this->_config["server"]["logcolor"])
+		{
+			this->_logcolor = this->_config["server"]["logcolor"].as<bool>();
+			Tintin_reporter::getLogManager().setColor(this->_logcolor);
+		}
+	}
 	return EXIT_SUCCESS;
 }
 
@@ -149,6 +159,7 @@ int			Taskmaster::reloadConfigFile( void )
 int			Taskmaster::exitProperly( void )
 {
 	this->freeLockFile();
+	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly released.")
 	return EXIT_SUCCESS;
 }
 

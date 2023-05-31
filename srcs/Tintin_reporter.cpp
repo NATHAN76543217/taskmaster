@@ -9,7 +9,7 @@ Tintin_reporter*			Tintin_reporter::_logManager = nullptr;
 Tintin_reporter::Tintin_reporter(const std::string & defaultFile) : 
 _defaultFile(defaultFile), 
 _timestamp_format(0), 
-_color_enabled(true)
+_color_enabled(false)
 {
 	this->addCategory(LOG_CATEGORY_DEFAULT, defaultFile);
 }
@@ -227,5 +227,11 @@ std::string				Tintin_reporter::timeToString( const struct timeval & time ) cons
 	buffer[strftime(buffer, sizeof(buffer) -1, "%d-%m-%Y %H:%M:%S", timeinfo)] = '\0';
 	return buffer;
 }
+
+void					Tintin_reporter::setColor( bool enabled )
+{
+	this->_color_enabled = enabled;
+}
+
 
 /* ************************************************************************** */

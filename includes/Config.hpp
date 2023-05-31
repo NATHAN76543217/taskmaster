@@ -15,6 +15,7 @@ class Config
 		Config( Config const & src );
 		~Config();
 
+		YAML::Node		operator[]( const std::string & keyword );
 		Config &		operator=( Config const & rhs );
 		
 		int					reloadConfigFile( void );
@@ -22,6 +23,7 @@ class Config
 		const std::string	&getPath( void ) const;
 
 	private:
+		YAML::Node		_config;
 		std::string		_pathConfigFile;
 		bool			_isReadOnly;
 

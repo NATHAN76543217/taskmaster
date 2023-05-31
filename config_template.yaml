@@ -4,7 +4,7 @@ server:
         - 4242
         # - 4242
     pwd: /tmp
-    logcolor: true
+    # logcolor: true
     logpath: /var/log/matt_daemon
     lockpath: /var/lock/matt_daemon.lock
     

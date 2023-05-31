@@ -10,7 +10,8 @@
 //TODO daemonized main process 
 //TODO start childs according to config
 //TODO Code a client with the grfic library FTXUI
-
+// TODO ptrace on ourselves to avoid process monitoring
+// TODO parse config file at start to have color enabled on every log
 
 
 void	signal_handler(int signal)
@@ -25,28 +26,6 @@ void	signal_handler(int signal)
 	// exit(0);
 }
 
-//TODO
-// 		static void			initLogfile(const std::string & filename );
-// void		Logger::initLogfile(const std::string & filename )
-// {
-// 	if (!filename.empty())
-// 	{
-// 		/* set a log file */
-// 		_logfile.open(filename, std::ofstream::out | std::ofstream::app);
-// 		if (_logfile.is_open() == false)
-// 			throw Logger::logFileException();
-// 		info("logfile (" + filename + ") initialisation done");
-// 	}
-// }
-//  public:
-// 		class	logFileException : std::exception
-// 		{
-// 			public:
-// 				virtual const char *what(void ) const throw()
-// 				{
-// 					return "Unable to open logfile";
-// 				}
-// 		};
 
 int	init_signals(struct sigaction *sa)
 {
@@ -71,16 +50,6 @@ int	init_signals(struct sigaction *sa)
 }
 
 
-int	check_root_permissions()
-{
-	uid_t euid = geteuid();
-	if (euid != 0)
-		return EXIT_FAILURE;
-	return EXIT_SUCCESS;
-}
-
-
-// TODO ptrace on ourselves to avoid process monitoring
 
 
 int main(int ac, char** av)
@@ -113,14 +82,14 @@ int main(int ac, char** av)
 		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to parse arguments.")
 		return EXIT_FAILURE;
 	}
+
 	if (init_signals(&sa) != EXIT_SUCCESS)
 	{
 		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to init signal handlers.")
 		return EXIT_FAILURE;
 	}
 
-	TM->loadConfigFile("config_template.yaml");
-	// TM->loadConfigFile("test.yml");
+	TM->loadConfigFile(TM_DEF_CONFIGPATH);
 	
 	// Here start to daemonize
 	int i = 0;

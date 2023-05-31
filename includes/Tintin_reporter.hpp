@@ -40,9 +40,9 @@
 # define LOG_LEVEL_CRITICAL_MSG_COLOR "\033[38;2;250;190;80m"
 
 // define prefix structure here
-# define LOG_LEVEL_DEBUG_MSG		"[" LOG_LEVEL_DEBUG_COLOR "DEBUG" RESET_ANSI "]  - " LOG_LEVEL_DEBUG_MSG_COLOR "\033[3m"
+# define LOG_LEVEL_DEBUG_MSG		"[" LOG_LEVEL_DEBUG_COLOR "DEBUG" RESET_ANSI "]  - " LOG_LEVEL_DEBUG_MSG_COLOR
 # define LOG_LEVEL_INFO_MSG			"[" LOG_LEVEL_INFO_COLOR "INFO" RESET_ANSI "]   - " LOG_LEVEL_INFO_MSG_COLOR
-# define LOG_LEVEL_WARNING_MSG		"[" LOG_LEVEL_WARNING_COLOR "WARN" RESET_ANSI "]   - " LOG_LEVEL_WARNING_MSG_COLOR"\033[3m"
+# define LOG_LEVEL_WARNING_MSG		"[" LOG_LEVEL_WARNING_COLOR "WARN" RESET_ANSI "]   - " LOG_LEVEL_WARNING_MSG_COLOR
 # define LOG_LEVEL_ERROR_MSG		"[" LOG_LEVEL_ERROR_COLOR "ERROR" RESET_ANSI "]  - " LOG_LEVEL_ERROR_MSG_COLOR
 # define LOG_LEVEL_CRITICAL_MSG		"[" LOG_LEVEL_CRITICAL_COLOR "CRITIC" RESET_ANSI "] - " LOG_LEVEL_CRITICAL_MSG_COLOR
 
@@ -119,11 +119,12 @@ class Tintin_reporter
 		}
 
 
-		void			log(uint level, const std::string & category, const std::string & message);
+		void			setColor( bool enabled );
 		std::string		getTimestamp( void ) const;
 		std::string		timeToString( const struct timeval & time ) const;
 		int				addCategory(const std::string & str, std::string outfile = "");
 
+		void			log(uint level, const std::string & category, const std::string & message);
 		void			log_critical(const std::string & category, const std::string & message);
 		void			log_error(const std::string & category, const std::string & message);
 		void			log_warning(const std::string & category, const std::string & message);
