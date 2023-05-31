@@ -104,6 +104,7 @@ int		Tintin_reporter::addCategory(const std::string & CategoryName, std::string 
 		}
 		// LOG_DEBUG(LOG_CATEGORY_DEFAULT, "File '" + outfile + "' opened successfuly.")
 	}
+	LOG_DEBUG(LOG_CATEGORY_DEFAULT, "New category added '" + this->_categories[CategoryName].name + "' pointing to '" + outfile + "'.")
 	return EXIT_SUCCESS;
 }
 

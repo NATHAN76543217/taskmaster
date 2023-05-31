@@ -1,11 +1,15 @@
 # include "Taskmaster.hpp"
 
-//TODO implement logging to files
+//DONE implement logging to files
 //DONE Finish to well format the LOGs
 //DONE Reload config file on SIGHUP
-//TODO Implement yamlLib and start parsing config file
-//TODO for logger implement defaultDestination for default output file
-
+//SONE Install yaml-cpp 
+//TODO Parse all config file
+//DONE for logger implement defaultDestination for default output file
+//TODO add lock file 
+//TODO daemonized main process 
+//TODO start childs according to config
+//TODO Code a client with the grfic library FTXUI
 
 
 
@@ -91,9 +95,7 @@ int main(int ac, char** av)
 	TM->initCategories();
 #endif
 
-	LOG_INFO(LOG_CATEGORY_DEFAULT, "PID: " + ntos(getpid()))
-	
-	if (check_root_permissions() != EXIT_SUCCESS)
+	if (TM->isRunningRootPermissions() == false)
 	{
 		LOG_DEBUG(LOG_CATEGORY_INIT, "You must haved to run this program.")
 		LOG_WARN(LOG_CATEGORY_DEFAULT, "You must have root permissions to run this program.")
@@ -101,6 +103,11 @@ int main(int ac, char** av)
 		LOG_CRITICAL(LOG_CATEGORY_NETWORK, "A big network error have root pdsffsdfsdsdfssfdermissions to run this program.")
 		return EXIT_FAILURE;
 	}
+
+	TM->takeLockFile();
+
+	LOG_INFO(LOG_CATEGORY_INIT, "PID: " + ntos(TM->getpid()))
+
 	if (TM->parse_arguments() != EXIT_SUCCESS)
 	{
 		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to parse arguments.")
@@ -123,7 +130,8 @@ int main(int ac, char** av)
 		i++;
 	}
 
-	LOG_INFO(LOG_CATEGORY_INIT, "After the loop")
+	TM->exitProperly();
+	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
 
 	return EXIT_SUCCESS;
 }

@@ -6,6 +6,7 @@
 # include <cstdlib>
 # include <cstdio>
 # include <unistd.h>
+# include <fcntl.h>
 # include <signal.h>
 
 
@@ -14,17 +15,21 @@
 # include "Tintin_reporter.hpp"
 
 # define TM_DEF_MAX_CONNECTIONS 3
+# define TM_DEF_LOCKPATH "./test.lock"
+// # define TM_DEF_LOCKPATH "/var/lock/taskmaster.lock"
 # define TM_DEF_LOGPATH "/var/log/taskmaster/taskmaster.log"
 
 class Taskmaster
 {
 	private:
+		std::string	_lockpath;
 		std::string	_logpath;
 		uint		_max_connections;
+		pid_t		_pid;
 		Config		_config;
 
 	protected:
-		Taskmaster() : _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS)
+		Taskmaster() : _lockpath(TM_DEF_LOCKPATH), _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS), _pid(::getpid())
 		{
 			(void) _max_connections;
 		}
@@ -39,6 +44,7 @@ class Taskmaster
 		 */
 		Taskmaster(Taskmaster &other) = delete;
 		Taskmaster(const Taskmaster &other) = delete;
+		
 		/**
 		 * Singletons should not be assignable.
 		 */
@@ -60,16 +66,53 @@ class Taskmaster
 		 */
 
 		void		initCategories( void ) const;
+		pid_t		getpid( void ) const;
+		void		takeLockFile( void ) const;
+		void		freeLockFile( void ) const;
+		bool		isRunningRootPermissions( void ) const;
+
 		int			parse_arguments( void );
 		
 		int			loadConfigFile(const std::string & path);
 		int			reloadConfigFile( void );
+		int			exitProperly( void );
 
 };
 
 
 /* Methods implementation */
 
+
+void		Taskmaster::takeLockFile( void ) const
+{
+	int fd = 0;
+
+	if ((fd = open(this->_lockpath.c_str(), O_CREAT|O_EXCL )) == -1) {
+		if (errno == EEXIST)
+		{
+			LOG_CRITICAL(LOG_CATEGORY_INIT, "The lock file already exist. Impossible to start a second instance of this program")
+		}
+		else
+			perror("open");
+		//TODO exit properly
+		exit(1);
+	}
+	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "'successfuly taken.");
+	close(fd);
+}
+
+void		Taskmaster::freeLockFile( void ) const
+{
+	std::remove(this->_lockpath.c_str() );
+}
+
+bool		Taskmaster::isRunningRootPermissions( void ) const
+{
+	uid_t euid = geteuid();
+	if (euid != 0)
+		return false;
+	return true;	
+}
 
 void		Taskmaster::initCategories( void ) const
 {
@@ -103,10 +146,17 @@ int			Taskmaster::reloadConfigFile( void )
 	return EXIT_SUCCESS;
 }
 
+int			Taskmaster::exitProperly( void )
+{
+	this->freeLockFile();
+	return EXIT_SUCCESS;
+}
+
+
 /**
  * Static methods should be defined outside the class.
  */
-Taskmaster* Taskmaster::taskmaster_= nullptr;;
+Taskmaster* Taskmaster::taskmaster_= nullptr;
 
 Taskmaster *Taskmaster::GetInstance()
 {
@@ -119,6 +169,12 @@ Taskmaster *Taskmaster::GetInstance()
     }
     return taskmaster_;
 }
+
+pid_t			Taskmaster::getpid( void ) const
+{
+	return this->_pid;
+}
+
 
 std::ostream &			operator<<( std::ostream & o, Taskmaster const & i );
 
