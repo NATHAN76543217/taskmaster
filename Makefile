@@ -29,20 +29,9 @@ SRCS_CLIENT		=	main.cpp
  
 HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
 
-LIBRARIES	=	argparse
-
-
-LIBFT_PATH		=	$(LIB_DIR)/libft
-# ARGPARSE_PATH	=	$(LIB_DIR)/argparse
 
 CPP_DBG_FLAGS		=	#-g3 -fsanitize=address
 CPP_CMP_FLAGS		=	-Wextra -Wall -Werror
-
-# CPP_INC_FLAGS		=	-I $(INC_DIR) -I$(LIB_DIR)/argparse 
-# CPP_INC_FLAGS	=	-I $(INC_DIR) -I$(LIB_DIR)/argparse -I$(LIB_DIR)/libft/includes
-# CPP_LNK_FLAGS		=	-L$(LIB_DIR)/argparse -largparse
-# CPP_LNK_FLAGS	=	-L $(LIB_DIR)/libft -L$(LIB_DIR)/argparse -lft -largparse
-
 
 
 SRC_FILES	=	$(shell find $(SRC_DIR) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')')
@@ -57,9 +46,15 @@ include fancyPrefix.mk
 #	include OS detection
 include detectOs.mk
 
+#	include libraries variables
+include libraries.mk
+
 #   Main rule
-all: display_os gitinit install_yaml_library openssl comp_lib check_sources check_headers $(NAME)
+all: display_os $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB) check_sources check_headers $(NAME)
 	@ echo "$(PREFIX_INFO) all done."
+
+# include display_os
+include displayOs.mk
 
 #	check_sources :
 #	simple bash script to check duplicates sources files 
@@ -95,38 +90,22 @@ check_headers:
 		exit 1 ; \
 	fi
 
-#	LIBRARIES
+
+
+
+#	./lib folder creation
+$(LIB_DIR): 
+	mkdir -p $(LIB_DIR)
+
+
+
 
 # YAML library
 
-YAML_LIB_VERSION	=	0.7.0
-YAML_LIB_PATH 		=	$(LIB_DIR)/yaml/
-CPP_INC_FLAGS		+=	-I $(YAML_LIB_PATH)/include
-CPP_LNK_FLAGS		+=	-L $(YAML_LIB_PATH)/build -lyaml-cpp 
-
-# install_yaml_library:
-# 	@echo "$(PREFIX_INFO) Installation de la lib YAML..."
-# 	@mkdir -p $(YAML_LIB_PATH)
-# 	@cd $(YAML_LIB_PATH) \
-# 		&& wget https://pyyaml.org/download/libyaml/yaml-$(YAML_LIB_VERSION).tar.gz -O yaml.tar.gz $(VOIDED) \
-# 		&& tar -xvf yaml.tar.gz $(VOIDED) \
-# 		&& cd yaml-$(YAML_LIB_VERSION) \
-# 		&& ./configure $(VOIDED) \
-# 		&& make $(VOIDED) \
-# 		&& make install $(VOIDED)
-# 	@echo "$(PREFIX_INFO) Installation de la lib YAML done !"
-# uninstall_yaml_library:
-# 	@echo "$(PREFIX_INFO) Desinstallation de la lib YAML..."
-# 	@ cd $(YAML_LIB_PATH) \
-# 		&& cd yaml-$(YAML_LIB_VERSION) \
-# 		&& make uninstall $(VOIDED)
-# 	@ rm -rf $(YAML_LIB_PATH)
-# 	@ echo "$(PREFIX_INFO) Desinstallation de la lib YAML done !"
-
-install_yaml_library:
-	@echo "$(PREFIX_INFO) Installation de la lib YAML..."
+$(YAML_LIB): 
+	@ echo "$(PREFIX_INFO) Installation de la lib YAML..."
 	@ wget -q https://github.com/jbeder/yaml-cpp/archive/refs/tags/yaml-cpp-$(YAML_LIB_VERSION).tar.gz -O $(LIB_DIR)/yaml.gz
-	@cd $(LIB_DIR) \
+	@ cd $(LIB_DIR) \
 		&& tar -xf yaml.gz \
 		&& mv yaml-cpp-yaml-cpp-$(YAML_LIB_VERSION) yaml
 	@ cd $(YAML_LIB_PATH) \
@@ -145,21 +124,14 @@ uninstall_yaml_library:
 	@ rm -rf $(YAML_LIB_PATH)
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib YAML done !"
 
-yaml: install_yaml_library
+
+
+
+
 
 # OpenSSL library
 
-# Openssl
-OPENSSL_LIB_VERSION		=	1.1
-ifeq ($(OS_DETECTED),LINUX)
-	OPENSSL_LIB_PATH	=	/usr/
-else ifeq ($(UNAME_S),Darwin)
-	OPENSSL_LIB_PATH		=	$(shell brew --prefix openssl@$(OPENSSL_LIB_VERSION))
-endif
-# CPP_LNK_FLAGS			+=	-lssl -lcrypto -L $(OPENSSL_LIB_PATH)/lib/
-# CPP_INC_IFLAGS			+=	-I $(OPENSSL_LIB_PATH)/include
-
-install_openssl_library:
+$(OPENSSL_LIB_PATH): 
 	@ echo "$(PREFIX_INFO) Installation de la lib OpenSSL..."
 	@ mkdir -p $(OPENSSL_LIB_PATH)
 	@ echo "$(PREFIX_WARN) Installation de la lib OpenSSL not implmented !"
@@ -170,22 +142,22 @@ uninstall_openssl_library:
 	@ echo "$(PREFIX_WARN) Desinstallation de la lib OpenSSL not implmented !"
 # @ echo "$(PREFIX_INFO) Desinstallation de la lib OpenSSL done !"
 
-openssl: install_openssl_library
 
-comp_lib:
-	@ echo "$(PREFIX_INFO) Compiling libraries..."
-	@ for lib in $(LIBRARIES) ; do \
-		echo "$(PREFIX_INFO) library $$lib done."; \
-		make -C $(LIB_DIR)/$$lib ; \
-	done
 
-#	Clean of libraries
-fclean_lib:
-	@ echo "$(PREFIX_CLEAN) Cleaning libraries."
-	@ for lib in $(LIBRARIES) ; do \
-		echo "$(PREFIX_CLEAN) Cleaning library $$lib"; \
-		make -C $(LIB_DIR)/$$lib fclean; \
-	done
+
+
+# Install cpp_argparse.hpp
+$(ARGPARSE_LIB):
+	@ echo "$(PREFIX_INFO) Installation de la lib header cpp_argparse.hpp ..."
+	@ git clone https://gist.github.com/Ludrak/eb3f0483b863bbda8eb4fa8cfe283aac $@
+
+uninstall_argparse:
+	@ rm -f ./lib/cpp_argparse.hpp
+	@ echo "$(PREFIX_INFO) Desinstallation de la lib header cpp_argparse.hpp ..."
+
+
+
+
 
 #	Bin directory
 $(BIN_DIR):
@@ -205,28 +177,23 @@ $(BIN_DIR)/$(SRC_DIR)/%.o : $(SRC_DIR)/%.cpp $(HEADER_FILES)
 	@ echo "$(PREFIX_COMP) Compiled: $(shell basename $<)"
 
 # clean rule
-clean: uninstall_yaml_library
+clean: 
 	@ echo "$(PREFIX_CLEAN) Cleaning $(BIN_DIR)/"
 	@ rm -rf $(BIN_DIR)
 
 # final clean rule
-fclean: fclean_lib clean
-	@ echo "$(PREFIX_CLEAN) Cleaning $(LIB_DIR)/"
-	@ rm -rf $(LIB_DIR)
+fclean: clean 
 	@ echo "$(PREFIX_CLEAN) Cleaning $(NAME)"
 	@ rm -f $(NAME)
+
+fcleanlib: fclean uninstall_yaml_library uninstall_argparse
+	@ echo "$(PREFIX_CLEAN) Cleaning $(LIB_DIR)/"
+	@ rm -rf $(LIB_DIR)
+	@ echo "Cleaned all libraries."
 
 # remake rule
 re: fclean all
 
-# git submodule initialisation
-
-dependencies_init:
-gitinit:
-	@ mkdir -p $(LIBFT_PATH)
-	@find $(LIBFT_PATH) -maxdepth 0 -empty -type d -exec printf "$(PREFIX_WARN) The library directory is empty.\n$(PREFIX_WARN) Cloning library 'libft' into {}.\n" \; -exec git clone "https://github.com/NATHAN76543217/libft.git" {} \;
-	# @ mkdir -p $(YAML_LIB_PATH)
-	# @find $(YAML_LIB_PATH) -maxdepth 0 -empty -type d -exec printf "$(PREFIX_WARN) The library directory is empty.\n$(PREFIX_WARN) Cloning library 'yaml-cpp' into {}.\n" \; -exec git clone "https://github.com/jbeder/yaml-cpp.git" {} \;
-# @mkdir -p $(ARGPARSE_PATH)
-# @find $(ARGPARSE_PATH) -maxdepth 0 -empty -type d -exec printf "$(PREFIX_WARN) The library directory is empty. Cloning library 'argparse' into {}" \; -exec git clone "https://github.com/NATHAN76543217/argparse.git" {} \;
+# make re with lib
+relib: fcleanlib all
 
