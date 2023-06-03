@@ -2,6 +2,7 @@
 test.yml
 lib/
 taskmaster
+taskmasterctl
 taskmaster.code-workspace
 .vscode
 *.log
