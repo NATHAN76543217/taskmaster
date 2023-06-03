@@ -34,7 +34,7 @@ LOG_DIR		= logs
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
 SRCS_SERVER		=	main.cpp Tintin_reporter.cpp Config.cpp
-SRCS_CLIENT		=	main.cpp
+SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
  
 HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
 
@@ -44,8 +44,8 @@ CPP_CMP_FLAGS		=	-Wextra -Wall -Werror
 
 
 
-CLIENT_SRC_FILES =	$(shell find $(SRC_DIR_CLIENT) | grep -E '$(shell echo $(SRCS_CLIENT) | tr ' ' '|')')
-SERVER_SRC_FILES =	$(shell find $(SRC_DIR_SERVER) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')')
+CLIENT_SRC_FILES =	$(shell find $(SRC_DIR_CLIENT) $(SRC_DIR_SERVER) | grep -E '$(shell echo $(SRCS_CLIENT) | tr ' ' '|')' | grep -v $(SRC_DIR_SERVER)/main.cpp)
+SERVER_SRC_FILES =	$(shell find $(SRC_DIR_CLIENT) $(SRC_DIR_SERVER) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')' | grep -v $(SRC_DIR_CLIENT)/main.cpp)
 HEADER_FILES     =	$(shell find $(INC_DIR) | grep -E '$(shell echo $(HEADERS) | tr ' ' '|')')
 CLIENT_OBJS		 =	$(addprefix $(BIN_DIR)/, $(CLIENT_SRC_FILES:.cpp=.o))
 SERVER_OBJS		 =	$(addprefix $(BIN_DIR)/, $(SERVER_SRC_FILES:.cpp=.o))
@@ -81,7 +81,6 @@ client: display_os init_lib check_headers check_sources $(BIN_DIR) $(CLIENT_OBJS
 
 # Initializes libraries for both client and server here
 init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB)
-
 
 # include display_os
 include displayOs.mk
