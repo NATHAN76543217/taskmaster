@@ -1,4 +1,6 @@
 # include "Taskmaster.hpp"
+# include "cpp_argparse.hpp"
+# include "net/server.hpp"
 
 //DONE implement logging to files
 //DONE Finish to well format the LOGs

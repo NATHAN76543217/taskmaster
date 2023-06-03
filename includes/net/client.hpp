@@ -143,7 +143,7 @@ class Client : public H::client_data_type, protected PacketManager
             // socket able to emit data
             if (FD_ISSET(this->_socket, &write_set))
             {
-                this->_send();
+                this->_send_data();
             }
 
             return (true);
@@ -191,14 +191,25 @@ class Client : public H::client_data_type, protected PacketManager
         template<typename T, typename std::size_t S = sizeof(T)>
         void    emit(const std::string& message, const T& data)
         {
-            packed_data<S> pack = pack_data<T>(message, data);
-            char    data_buffer[sizeof(packed_data<S>)] = {0};
-
-            serialize(pack, (uint8_t*)data_buffer);
-            this->_data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
-            FD_SET(this->_socket, &this->_send_fd);
+            this->_emit_base(message, data);
             std::cout << "set `" << message << "` to be emitted to server" << std::endl;
         }
+
+
+        template<typename T, typename std::size_t S = sizeof(T)>
+        bool    emit_now(const std::string& message, const T& data)
+        {
+            this->_emit_base(message, data);
+            std::cout << "set `" << message << "` to be emitted to server" << std::endl;
+            try {
+                return this->_send_data();
+            } catch (SendException)
+            {
+                return (false);
+            }
+        }
+        
+
 
         void    disconnect()
         {
@@ -307,12 +318,23 @@ class Client : public H::client_data_type, protected PacketManager
 
 
 
-        void    _send()
+        template<typename T, typename std::size_t S = sizeof(T)>
+        void    _emit_base(const std::string& message, const T& data)
+        {
+            packed_data<S> pack = pack_data<T>(message, data);
+            char    data_buffer[sizeof(packed_data<S>)] = {0};
+
+            serialize(pack, (uint8_t*)data_buffer);
+            this->_data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
+            FD_SET(this->_socket, &this->_send_fd);
+        }
+
+        bool    _send_data()
         {
             if (this->_data_to_send.empty())
             {
                 std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
-                return ;
+                return (false);
             }
             std::cout << "emitting to server" << std::endl;
             ssize_t sent_bytes = send(this->_socket, this->_data_to_send.top().c_str(), this->_data_to_send.top().size(), 0);
@@ -321,7 +343,7 @@ class Client : public H::client_data_type, protected PacketManager
             else if (sent_bytes == 0)
             {
                 std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
-                return ;
+                return (false);
             }
             else if ((size_t)sent_bytes != this->_data_to_send.top().size())
             {
@@ -329,11 +351,12 @@ class Client : public H::client_data_type, protected PacketManager
                 std::string left = this->_data_to_send.top().substr(sent_bytes, this->_data_to_send.top().length());
                 this->_data_to_send.pop();
                 this->_data_to_send.push(left);   
-                return ;
+                return (false);
             }
             // sent full packet.
             this->_data_to_send.pop();
             FD_CLR(this->_socket, &this->_send_fd);
+            return (true);
         }
 
 

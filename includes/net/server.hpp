@@ -217,7 +217,7 @@ class Server
                 // received from client
                 if (FD_ISSET(it->second.getSocket(), &selected_read_fds))
                 {
-                    if (_receive(it->second) != 0)
+                    if (this->_receive(it->second) != 0)
                         break ; // sent disconnect
                     if (!running)
                         return (false); 
@@ -225,7 +225,7 @@ class Server
                 // writing enabled for client, can send data
                 if (FD_ISSET(it->second.getSocket(), &selected_write_fds))
                 {
-                    _send(it->second);
+                    this->_send_data(it->second);
                 }
             }
 
@@ -293,30 +293,61 @@ class Server
 
 
         /* ================================================ */
-        /* Emits                                   */
+        /* Emits                                            */
         /* ================================================ */
-
-        // TODO FOR ALL EMIT : T should be serializable with the << operator and deserializable using a specified copy constructor (i.e. see serialization in c++)
-        //                     it should also be checked with a std::enable_if<std::is_serializable<T>::value, ___>::type
-
+        
         /* emits T to all clients connected as ServerClient */
-        template<typename T, typename std::size_t S = sizeof(T)>
+        template<typename T>
         void    emit(const std::string& message, const T& to_emit)
-        { /* todo */ (void)message; (void)to_emit; }
+        { 
+            for (client_type& client : this->_clients)
+                this->_emit_base(message, to_emit);
+            std::cout << "set `" << message << "` to be emitted for each clients" << std::endl;
+        }
     
         /* emits T to the client specified as `client` */
-        template<typename T, typename std::size_t S = sizeof(T)>
+        template<typename T>
         void    emit(const std::string& message, const T& to_emit, client_type& client)
         { 
-            packed_data<S> pack = pack_data<T>(message, to_emit);
-            char    data_buffer[sizeof(packed_data<S>)] = {0};
-
-            serialize(pack, (uint8_t*)data_buffer);
-            client._data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
-            FD_SET(client.getSocket(), &this->_write_fds);            
+            this->_emit_base(message, to_emit, client);
             std::cout << "set `" << message << "` to be emitted to socket " << client.getSocket() << std::endl;
         }
+        
+        /* emit_now emits the same way emit does, however it doesn't wait for wait_update() to be sent   */
+        /* this is usefull for errors or for emitting something before calling disconnect()              */
+        /* however the client's socket might not be able to receive the packet at the moment it is sent  */
+        /* in that case, the package isn't queued and emit_now returns false indicating a failure        */
+        /* same thing if send wasn't able to send the packet entierely, emit_now returns false           */
+        /* ! IT WILL NOT SEND THE LEFTOVER PACKET IF IT WASN'T ABLE TO SENT IT ENTIERLY !                */
+        /* for that reason, it should be used to send small data structures to ensure data packages are  */
+        /* completely sent.                                                                              */
+        template<typename T>
+        bool    emit_now(const std::string& message, const T& to_emit, client_type& client)
+        { 
+            this->emit(message, to_emit, client);
+            try {
+                return this->_send_data(client);
+            } catch (SendException e)
+            {
+                return (false);
+            }
+            return (true);
+        }
 
+        template<typename T>
+        bool    emit_now(const std::string& message, const T& to_emit)
+        { 
+            this->emit(message, to_emit);
+            int emitted_all = 0;
+            try {
+                for (client_type& client : this->_clients)
+                    emitted_all += this->_send_data(client);
+            } catch (SendException e)
+            {
+                return (false);
+            }
+            return (emitted_all == this->_clients.size());
+        }
 
 
         /* ================================================ */
@@ -452,6 +483,7 @@ class Server
         }
 
 
+
         /* ================================================ */
         /* Recv handler & unpacker                          */
         /* ================================================ */
@@ -581,34 +613,57 @@ class Server
 
 
 
-        void    _send(client_type& to)
+
+
+        /* ================================================ */
+        /* Emit base                                        */
+        /* ================================================ */
+
+        template<typename T, typename std::size_t S = sizeof(T)>
+        void    _emit_base(const std::string& message, const T& to_emit, client_type& client)
         {
-            if (to._data_to_send.empty())
+            packed_data<S> pack = pack_data<T>(message, to_emit);
+            char    data_buffer[sizeof(packed_data<S>)] = {0};
+
+            serialize(pack, (uint8_t*)data_buffer);
+            client._data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
+            FD_SET(client.getSocket(), &this->_write_fds);   
+        }
+
+
+        /* ================================================ */
+        /* Send                                             */
+        /* ================================================ */
+
+        bool    _send_data(client_type& of)
+        {
+            if (of._data_to_send.empty())
             {
                 std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
-                return ;
+                return false;
             }
-            std::cout << "emitting to client on socket " << to.getSocket() << std::endl;
-            ssize_t sent_bytes = send(to._socket, to._data_to_send.top().c_str(), to._data_to_send.top().size(), 0);
+            std::cout << "emitting to client on socket " << of.getSocket() << std::endl;
+            ssize_t sent_bytes = send(of._socket, of._data_to_send.top().c_str(), of._data_to_send.top().size(), 0);
             if (sent_bytes < 0)
                 throw server_type::SendException();
             else if (sent_bytes == 0)
             {
-                std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
-                return ;
+                std::cerr << "sent 0 bytes of data on socket " << of.getSocket() << std::endl;
+                return false;
             }
-            else if ((size_t)sent_bytes != to._data_to_send.top().size())
+            else if ((size_t)sent_bytes != of._data_to_send.top().size())
             {
                 // cropped data todo
-                std::cerr << "sent data was cropped" << std::endl;
-                std::string left = to._data_to_send.top().substr(sent_bytes, to._data_to_send.top().length());
-                to._data_to_send.pop();
-                to._data_to_send.push(left);   
-                return ;
+                std::cerr << "sent data was cropped for socket " << of.getSocket() << std::endl;
+                std::string left = of._data_to_send.top().substr(sent_bytes, of._data_to_send.top().length());
+                of._data_to_send.pop();
+                of._data_to_send.push(left);   
+                return false;
             }
             // sent full packet.
-            to._data_to_send.pop();
-            FD_CLR(to.getSocket(), &this->_write_fds);
+            of._data_to_send.pop();
+            FD_CLR(of.getSocket(), &this->_write_fds);
+            return (true);
         }
 
 
