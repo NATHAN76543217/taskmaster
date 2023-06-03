@@ -1,4 +1,4 @@
-.PHONY: clean fclean re all os check_sources check_headers
+.PHONY: clean fclean re all check_sources check_headers
 
 #######################################################################
 #
@@ -24,21 +24,21 @@ LOG_DIR		= logs
 # - fill only with name of the file
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
-SRCS_SERVER		=	main.cpp Tintin_reporter.cpp Config.cpp
+SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Job.cpp 
 SRCS_CLIENT		=	main.cpp
  
-HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
+HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp Job.hpp tm_values.hpp
 
 
 CPP_DBG_FLAGS		=	#-g3 -fsanitize=address
 CPP_CMP_FLAGS		=	-Wextra -Wall -Werror
 
 
-SRC_FILES	=	$(shell find $(SRC_DIR) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')')
-HEADER_FILES=	$(shell find $(INC_DIR) | grep -E '$(shell echo $(HEADERS) | tr ' ' '|')')
-OBJS		=	$(addprefix $(BIN_DIR)/, $(SRC_FILES:.cpp=.o))
+SRC_FILES		=	$(shell find $(SRC_DIR) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')')
+HEADER_FILES	=	$(shell find $(INC_DIR) | grep -E '$(shell echo $(HEADERS) | tr ' ' '|')')
+OBJS			=	$(addprefix $(BIN_DIR)/, $(SRC_FILES:.cpp=.o))
 CPP_INC_FLAGS	+=	$(addprefix -I,$(shell echo $(HEADER_FILES) | tr ' ' '\n' | rev | cut -d'/' -f2- | rev | sort | uniq))
-C_LFLAG		+=	$(addprefix -L,$(addprefix $(LIB_DIR), $(LIBRARIES)))
+C_LFLAG			+=	$(addprefix -L,$(addprefix $(LIB_DIR), $(LIBRARIES)))
 
 # include prefix definitions
 include fancyPrefix.mk

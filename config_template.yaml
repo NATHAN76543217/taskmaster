@@ -1,28 +1,30 @@
 server:
+    daemonize: true
     max_connections: 3
     ports:
         - 4242
         # - 4242
     pwd: /tmp
-    # logcolor: true
+    logcolor: true
     logpath: /var/log/matt_daemon
     lockpath: /var/lock/matt_daemon.lock
     
 programs:
     nginx:
         cmd: "/usr/local/bin/nginx -c /etc/nginx/test.conf"
-        numprocs: 1
+        nbprocs: 1
         umask: 022
         workingdir: /tmp
         autostart: true
-        autorestart: unexpected
+        restartpolicy: unexpected
+        nbretrymax: 3
         exitcodes:
-            - 0
+            - 1
             - 2
-        startretries: 3
+            - 4
         starttime: 5
-        stopsignal: TERM
         stoptime: 10
+        stopsignal: SIGINT
         stdout: /tmp/nginx.stdout
         stderr: /tmp/nginx.stderr
         env:
@@ -30,15 +32,82 @@ programs:
             ANSWER: 42
     vogsphere:
         cmd: "/usr/local/bin/vogsphere-worker --no-prefork"
-        numprocs: 8
+        nbprocs: sqdsq
         umask: 077
         workingdir: /tmp
-        autostart: true
-        autorestart: unexpected
-        exitcodes: 0
-        startretries: 3
-        starttime: 5
-        stopsignal: USR1
-        stoptime: 10
+        autostart: false
+        restartpolicy: always
+        nbretrymax: 3
+        exitcodes: 23
+        starttime: 0
+        stoptime: -1
+        stopsignal: ocouou
         stdout: /tmp/vgsworker.stdout
         stderr: /tmp/vgsworker.stderr
+        env:
+    testJob:
+        cmd: "/usr/bin/ls ."
+        nbprocs: 0
+        stdout: allow
+        stderr: discard
+        autostart: false
+        nbretrymax: coucou
+        restartpolicy: never
+        exitcodes: 34
+            - 
+        starttime: -coucou
+        stoptime: coucou
+        stopsignal: 30
+        env: coucou
+
+    testJob-2:
+        cmd: "/usr/InvalidCMD"
+        restartpolicy: onfailure
+        exitcodes:
+            - -24
+            - -42
+            - alphaetomega
+            - --
+            - 32
+        stoptime:
+            - cucou
+            - test
+        env:
+            helllo: coucou
+            "23": 23
+            "\"\"" : "test"
+        stopsignal: -42
+        
+
+
+# All possible fields with all possible values
+# server:
+#     daemonize: true
+#     max_connections: 3
+#     ports:
+#         - 4242
+#         # - 4242
+#     pwd: /tmp
+#     # logcolor: true
+#     logpath: /var/log/matt_daemon
+#     lockpath: /var/lock/matt_daemon.lock
+# programs:
+    # process1:
+    #     cmd: "command to execute at launch"
+    #     nbprocs: 1
+    #     umask: 022
+    #     workingdir: /tmp
+    #     autostart: true / false
+    #     restartpolicy: always / never / onfailure
+    #     nbretrymax: 3
+    #     exitcodes:
+    #         - 0
+    #         - 2
+    #     starttime: 5
+    #     stopsignal: TERM
+    #     stoptime: 10
+    #     stdout: allow / discard / path/to/outuput/file
+    #     stderr: /tmp/nginx.stderr
+    #     env:
+    #         ENV_VAR1: taskmaster
+    #         ENV_VAR2: 42

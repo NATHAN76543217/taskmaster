@@ -12,7 +12,8 @@
 //TODO Code a client with the grfic library FTXUI
 // TODO ptrace on ourselves to avoid process monitoring
 // TODO parse config file at start to have color enabled on every log
-
+//TODO define all auto restart possible values for conf
+//TODO use strsignal to interpret signal number to signal string
 
 void	signal_handler(int signal)
 {
@@ -89,8 +90,19 @@ int main(int ac, char** av)
 		return EXIT_FAILURE;
 	}
 
-	TM->loadConfigFile(TM_DEF_CONFIGPATH);
+	if (TM->loadConfigFile(TM_DEF_CONFIGPATH))
+	{
+		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
+		TM->exitProperly();
+		exit(EXIT_FAILURE);
+	}
 	
+	// Display all jobs
+	std::cout << "=== JOBS ===" << std::endl;
+	for (std::list<Job>::const_iterator it = TM->_joblist.begin(); it != TM->_joblist.end(); it++)
+	{
+		std::cout << *it;
+	}
 	// Here start to daemonize
 	int i = 0;
 	while (i < 60000)

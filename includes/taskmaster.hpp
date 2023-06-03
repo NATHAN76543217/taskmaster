@@ -11,33 +11,41 @@
 
 
 # include "yaml-cpp/yaml.h"
+# include "tm_values.hpp"
 # include "Config.hpp"
+# include "Job.hpp"
 # include "Tintin_reporter.hpp"
 
-# define TM_DEF_MAX_CONNECTIONS 3
-# define TM_DEF_CONFIGPATH "./config_template.yaml"
-# define TM_DEF_LOCKPATH "./test.lock"
-// # define TM_DEF_LOCKPATH "/var/lock/taskmaster.lock"
-# define TM_DEF_LOGPATH "/var/log/taskmaster/taskmaster.log"
+
 
 class Taskmaster
 {
 	private:
-		std::string	_lockpath;
-		bool		_logcolor;
-		std::string	_logpath;
-		uint		_max_connections;
 		pid_t		_pid;
 		Config		_config;
 
+		/* Config values */
+		std::string	_lockpath;
+		std::string	_logpath;
+		uint		_max_connections;
+		bool		_logcolor;
+
 	protected:
-		Taskmaster() : _lockpath(TM_DEF_LOCKPATH), _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS), _pid(::getpid())
+		/* Constructor */
+		Taskmaster() : _pid(::getpid()), _lockpath(TM_DEF_LOCKPATH), _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS), _logcolor(TM_DEF_LOGCOLOR) 
 		{
 			(void) _max_connections;
 		}
+		/* Destructor */
 		~Taskmaster() {}
 
+		/* Uniq instance */
 		static Taskmaster* taskmaster_;
+
+		int			_parseConfigServer( void );
+		int			_parseConfigPrograms( void );
+
+
 
 	public:
 
@@ -76,115 +84,14 @@ class Taskmaster
 		int			parse_arguments( void );
 		
 		int			loadConfigFile(const std::string & path);
+
 		int			reloadConfigFile( void );
 		int			exitProperly( void );
 
+//REVIEW move this to prive
+		std::list<Job>	_joblist;
+
 };
-
-
-/* Methods implementation */
-
-
-void		Taskmaster::takeLockFile( void ) const
-{
-	int fd = 0;
-
-	if ((fd = open(this->_lockpath.c_str(), O_CREAT|O_EXCL )) == -1) {
-		if (errno == EEXIST)
-		{
-			LOG_CRITICAL(LOG_CATEGORY_INIT, "The lock file already exist. Impossible to start a second instance of this program")
-		}
-		else
-			perror("open");
-		//TODO exit properly
-		exit(1);
-	}
-	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly taken.");
-	close(fd);
-}
-
-void		Taskmaster::freeLockFile( void ) const
-{
-	std::remove(this->_lockpath.c_str() );
-}
-
-bool		Taskmaster::isRunningRootPermissions( void ) const
-{
-	uid_t euid = geteuid();
-	if (euid != 0)
-		return false;
-	return true;	
-}
-
-void		Taskmaster::initCategories( void ) const
-{
-	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
-}
-
-int			Taskmaster::parse_arguments( void )
-{
-	return EXIT_SUCCESS;
-}
-
-int			Taskmaster::loadConfigFile(const std::string & path)
-{
-	if (this->_config.loadConfigFile(path) == EXIT_FAILURE)
-	{
-		return EXIT_FAILURE;
-	}
-	if (this->_config["server"])
-	{
-		if (this->_config["server"]["logcolor"])
-		{
-			this->_logcolor = this->_config["server"]["logcolor"].as<bool>();
-			Tintin_reporter::getLogManager().setColor(this->_logcolor);
-		}
-	}
-	return EXIT_SUCCESS;
-}
-
-int			Taskmaster::reloadConfigFile( void )
-{
-	if (this->_config.reloadConfigFile())
-	{
-		return EXIT_FAILURE;
-	}
-	return EXIT_SUCCESS;
-}
-
-int			Taskmaster::exitProperly( void )
-{
-	this->freeLockFile();
-	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly released.")
-	return EXIT_SUCCESS;
-}
-
-
-/**
- * Static methods should be defined outside the class.
- */
-Taskmaster* Taskmaster::taskmaster_= nullptr;
-
-Taskmaster *Taskmaster::GetInstance()
-{
-    /**
-     * This is a safer way to create an instance. instance = new Singleton is
-     * dangeruous in case two instance threads wants to access at the same time
-     */
-    if(taskmaster_==nullptr){
-        taskmaster_ = new Taskmaster();
-    }
-    return taskmaster_;
-}
-
-pid_t			Taskmaster::getpid( void ) const
-{
-	return this->_pid;
-}
 
 
 std::ostream &			operator<<( std::ostream & o, Taskmaster const & i );
