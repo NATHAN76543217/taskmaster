@@ -1,6 +1,7 @@
 # Custom
 test.yml
 lib/
+bin/
 taskmaster
 taskmaster.code-workspace
 .vscode

@@ -58,6 +58,7 @@
 # define LOG_CATEGORY_SIGNAL	"SIGNAL"
 # define LOG_CATEGORY_NETWORK	"NETWORKING"
 # define LOG_CATEGORY_CONFIG	"CONFIG"
+# define LOG_CATEGORY_JOB		"JOB"
 
 /* If enabled create automatically new categories without throwing an exception */
 # define LOG_CATEGORY_AUTO		false

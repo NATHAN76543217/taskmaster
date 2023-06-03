@@ -151,7 +151,7 @@ void			Tintin_reporter::log_debug(const std::string & category, const std::strin
 	if (this->_color_enabled)
 		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_DEBUG_MSG << message << RESET_ANSI << std::endl;
 	else
-		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [DEBUG] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [DEBUG]  - " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_info(const std::string & category, const std::string & message)
@@ -159,7 +159,7 @@ void			Tintin_reporter::log_info(const std::string & category, const std::string
 	if (this->_color_enabled)
 		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_INFO_MSG << message << RESET_ANSI << std::endl;
 	else
-		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [INFO] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [INFO]   - " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_warning(const std::string & category, const std::string & message)
@@ -167,7 +167,7 @@ void			Tintin_reporter::log_warning(const std::string & category, const std::str
 	if (this->_color_enabled)
 		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_WARNING_MSG << message << RESET_ANSI << std::endl;
 	else
-		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [WARNING] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [WARN]   - " << message << RESET_ANSI << std::endl;
 }
 
 
@@ -176,7 +176,7 @@ void			Tintin_reporter::log_error(const std::string & category, const std::strin
 	if (this->_color_enabled)
 		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_ERROR_MSG << message << RESET_ANSI << std::endl;
 	else
-		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [ERROR] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [ERROR]  - " << message << RESET_ANSI << std::endl;
 }
 
 void			Tintin_reporter::log_critical(const std::string & category, const std::string & message)
@@ -184,7 +184,7 @@ void			Tintin_reporter::log_critical(const std::string & category, const std::st
 	if (this->_color_enabled)
 		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " " << LOG_LEVEL_CRITICAL_MSG << message << RESET_ANSI << std::endl;
 	else
-		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [CRITICAL] " << message << RESET_ANSI << std::endl;
+		*(this->_opened_files[this->_categories[category].filename]) << this->getLogHead(category) << " [CRITIC] - " << message << RESET_ANSI << std::endl;
 }
 
 /*
