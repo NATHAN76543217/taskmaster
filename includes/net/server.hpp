@@ -13,6 +13,8 @@
 #include "packet.hpp"
 #include "dto_base.hpp"
 
+#include "Tintin_reporter.hpp"
+
 // predefinition for ServerClient
 template<typename H>
 class Server;
@@ -283,26 +285,26 @@ class Server
         {
             if (name.length() > sizeof(packed_data_header<0>::message_name))
             {
-                std::cout << "cannot add handler for `" << name << "` message: name is too long (" 
-                    << sizeof(packed_data_header<0>::message_name) << " max)" << std::endl; 
+                LOG_ERROR(LOG_CATEGORY_INIT, "cannot add handler for `" << name << "` message: name is too long (" 
+                    << sizeof(packed_data_header<0>::message_name) << " max)"); 
                 return ;           
             }
             this->_messages_handlers.insert(std::make_pair(name, handler));
-            std::cout << "added new handler for `" << name << "` message" << std::endl;
+            LOG_INFO(LOG_CATEGORY_INIT, "added new handler for `" << name << "` message");
         }
 
 
         /* ================================================ */
         /* Emits                                            */
         /* ================================================ */
-        
+
         /* emits T to all clients connected as ServerClient */
         template<typename T>
         void    emit(const std::string& message, const T& to_emit)
         { 
             for (client_type& client : this->_clients)
                 this->_emit_base(message, to_emit);
-            std::cout << "set `" << message << "` to be emitted for each clients" << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted for each clients");
         }
     
         /* emits T to the client specified as `client` */
@@ -310,7 +312,7 @@ class Server
         void    emit(const std::string& message, const T& to_emit, client_type& client)
         { 
             this->_emit_base(message, to_emit, client);
-            std::cout << "set `" << message << "` to be emitted to socket " << client.getSocket() << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted to socket " << client.getSocket())
         }
         
         /* emit_now emits the same way emit does, however it doesn't wait for wait_update() to be sent   */
@@ -360,13 +362,13 @@ class Server
             int socket = client.getSocket();
             if (this->_clients.erase(socket) == 0)
             {
-                std::cout << "trying to disconnect unkown client from socket " << socket << std::endl;
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "trying to disconnect unkown client from socket " << socket)
                 return false;
             }
             FD_CLR(socket, &this->_read_fds);
             ::close(socket);
             this->n_clients_connected--;
-            std::cout << "client disconnected from socket " << socket << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "client disconnected from socket " << socket);
             return (true);
         }
 
@@ -415,7 +417,7 @@ class Server
                 throw ListenException();
             
             FD_SET(this->_socket, &this->_read_fds);
-            std::cout << "Server started listening on address " << this->ip_address << " on port " << this->port << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Server started listening on address " << this->ip_address << " on port " << this->port);
         }
 
         void    _init_socket6(const int max_pending_connections)
@@ -431,7 +433,7 @@ class Server
                 throw ListenException();
             
             FD_SET(this->_socket6, &this->_read_fds);
-            std::cout << "Server started listening on IPv6 on address " << this->ip_address6 << " on port " << this->port << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Server started listening on IPv6 on address " << this->ip_address6 << " on port " << (this->port + 1));
         }
 
 
@@ -445,18 +447,22 @@ class Server
             socklen_t       len;
             int client_socket = ::accept(this->_socket, (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
+            {
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed with error: " << std::strerror(errno));
                 throw AcceptException();
+            }
             this->n_clients_connected++;
             
             std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket)));
             if (insertion.second == false)
             {
-                std::cerr << "client insertion failed" << std::endl;
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed for client just arrived on socket " << client_socket);
+                ::close(client_socket);
                 throw AcceptException();
             }
 
             FD_SET(client_socket, &this->_read_fds);
-            std::cout << "new client connected on socket " << client_socket << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on socket " << client_socket);
             this->_client_handler.onConnected((*insertion.first).second, client_addr);
             return (client_socket);
         }
@@ -467,17 +473,20 @@ class Server
             socklen_t       len;
             int client_socket = ::accept(this->_socket6, (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
+            {
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on IPv6 with error: " << std::strerror(errno));
                 throw AcceptException();
+            }
             this->n_clients_connected++;
             std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket)));
             if (insertion.second == false)
             {
-                std::cerr << "client insertion failed" << std::endl;
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed for client just arrived on socket6 " << client_socket);
                 throw AcceptException();
             }
 
             FD_SET(client_socket, &this->_read_fds);
-            std::cout << "new client connected on IPv6 on socket " << client_socket << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on IPv6 on socket " << client_socket);
             this->_client_handler.onConnectedIPv6((*insertion.first).second, client_addr);
             return (client_socket);
         }
@@ -528,7 +537,7 @@ class Server
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_client_handler.onMessageMismatch(from, from._received_packet.message_name);
-                    std::cerr << "Unknown data handler for message: `" << from._received_packet.message_name << "`" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << from._received_packet.message_name << "` sent on socket " << from.getSocket());
                     from._cancelPacket();
                     return 0;
                 }
@@ -538,7 +547,7 @@ class Server
             {
                 if ((size_t)size < sizeof(packed_data_header<0>))
                 {
-                    std::cerr << "invalid new packet size is smaller than data_header size: cannot parse packet" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Invalid new packet from socket " << from.getSocket() << " packet size is smaller than data_header size: cannot parse packet");
                     return 0;
                 }
 
@@ -553,13 +562,13 @@ class Server
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_client_handler.onMessageMismatch(from, message_name);
-                    std::cerr << "Unknown data handler for message: `" << message_name << "`" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << from._received_packet.message_name << "` received on socket " << from.getSocket());
                     return 0;
                 }
                 if (handler->second.sizeof_type != data_header.data_size)
                 {
-                    std::cerr << "Packet size for message `" << message_name << "` doesnt correspond with current message packet type definition: expected a data containing " 
-                    << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` received on socket " << from.getSocket() << " doesnt correspond with current message packet type definition: expected a data containing " 
+                    << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes");
                     return (0);
                 }
 
@@ -577,7 +586,7 @@ class Server
             // this should never happen but must be here for security
             if (handler->second.sizeof_type != from._received_packet.data_size)
             {
-                std::cerr << "Parsed packet size doesn't correspond to size in handler !!!" << std::endl;
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Parsed packet received on socket " << from.getSocket() << " size doesn't correspond to size in handler !!!");
                 from._cancelPacket();
                 return (0);
             }
@@ -639,25 +648,28 @@ class Server
         {
             if (of._data_to_send.empty())
             {
-                std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending on socket " << of.getSocket() << " however no data is provider to send.")
                 return false;
             }
-            std::cout << "emitting to client on socket " << of.getSocket() << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to client on socket " << of.getSocket());
             ssize_t sent_bytes = send(of._socket, of._data_to_send.top().c_str(), of._data_to_send.top().size(), 0);
             if (sent_bytes < 0)
+            {
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Send to socket " << of.getSocket() << " failed with error: " << std::strerror(errno))
                 throw server_type::SendException();
+            }
             else if (sent_bytes == 0)
             {
-                std::cerr << "sent 0 bytes of data on socket " << of.getSocket() << std::endl;
+                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data to socket " << of.getSocket());
                 return false;
             }
             else if ((size_t)sent_bytes != of._data_to_send.top().size())
             {
                 // cropped data todo
-                std::cerr << "sent data was cropped for socket " << of.getSocket() << std::endl;
                 std::string left = of._data_to_send.top().substr(sent_bytes, of._data_to_send.top().length());
                 of._data_to_send.pop();
                 of._data_to_send.push(left);   
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent to socket " << of.getSocket()<< " was cropped for socket " << of.getSocket() << ": " << of._data_to_send.top().length() << " bytes left to send");
                 return false;
             }
             // sent full packet.

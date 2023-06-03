@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include "packet.hpp"
 #include "dto_base.hpp"
+#include "Tintin_reporter.hpp"
 
 template<typename D>
 class Client;
@@ -178,11 +179,12 @@ class Client : public H::client_data_type, protected PacketManager
             // but accessible in server
             if (message_name.length() > (sizeof(packed_data_header<0>) - sizeof(size_t)))
             {
-                std::cout << "cannot add handler for `" << message_name << "` message: name is too long (" 
-                    << (sizeof(packed_data_header<0>) - sizeof(size_t)) << " max)" << std::endl; 
+                LOG_ERROR(LOG_CATEGORY_INIT, "cannot add handler for `" << name << "` message: name is too long (" 
+                    << sizeof(packed_data_header<0>::message_name) << " max)");  
                 return ;
             }
             this->_messages_handlers.insert(std::make_pair(message_name, handler));
+            LOG_INFO(LOG_CATEGORY_INIT, "added new handler for `" << name << "` message");
         }
 
 
@@ -192,7 +194,7 @@ class Client : public H::client_data_type, protected PacketManager
         void    emit(const std::string& message, const T& data)
         {
             this->_emit_base(message, data);
-            std::cout << "set `" << message << "` to be emitted to server" << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted to the server");
         }
 
 
@@ -200,7 +202,7 @@ class Client : public H::client_data_type, protected PacketManager
         bool    emit_now(const std::string& message, const T& data)
         {
             this->_emit_base(message, data);
-            std::cout << "set `" << message << "` to be emitted to server" << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted now to the server");
             try {
                 return this->_send_data();
             } catch (SendException)
@@ -253,8 +255,7 @@ class Client : public H::client_data_type, protected PacketManager
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_handler.onMessageMismatch(this->_received_packet.message_name);
-                    std::cerr << "Unknown data handler for message: `" << this->_received_packet.message_name << "`" << std::endl;
-                    this->_cancelPacket();
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message: `" << this->_received_packet.message_name << "`");                    this->_cancelPacket();
                     return (true);
                 }
             }
@@ -263,7 +264,7 @@ class Client : public H::client_data_type, protected PacketManager
             {
                 if ((size_t)size < sizeof(packed_data_header<0>))
                 {
-                    std::cerr << "invalid new packet size is smaller than data_header size: cannot parse packet" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "invalid new packet size is smaller than data_header size: cannot parse packet");
                     return (true);
                 }
 
@@ -275,16 +276,17 @@ class Client : public H::client_data_type, protected PacketManager
                 // check message validity
                 std::string message_name(data_header.message_name, std::strlen(data_header.message_name));
                 handler = this->_messages_handlers.find(message_name);
+                // todo check on alpha-numeric first
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_handler.onMessageMismatch(message_name);
-                    std::cerr << "Unknown data handler for message: `" << message_name << "`" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message: `" << this->_received_packet.message_name << "`");                    this->_cancelPacket();
                     return (true);
                 }
                 if (handler->second.sizeof_type != data_header.data_size)
                 {
-                    std::cerr << "Packet size for message `" << message_name << "` doesnt correspond with current message packet type definition: expected a data containing " 
-                    << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes" << std::endl;
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` received on socket " << from.getSocket() << " doesnt correspond with current message packet type definition: expected a data containing " 
+                    << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes");
                     return (true);
                 }
 
@@ -301,7 +303,7 @@ class Client : public H::client_data_type, protected PacketManager
         
             if (handler->second.sizeof_type != this->_received_packet.data_size)
             {
-                std::cerr << "Parsed packet size doesn't correspond to size in handler !!!" << std::endl;
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Parsed packet size doesn't correspond to size in handler !!!");
                 this->_cancelPacket();
                 return (true);
             }
@@ -333,24 +335,27 @@ class Client : public H::client_data_type, protected PacketManager
         {
             if (this->_data_to_send.empty())
             {
-                std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending however no data is provider to send.");
                 return (false);
             }
-            std::cout << "emitting to server" << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to server");
             ssize_t sent_bytes = send(this->_socket, this->_data_to_send.top().c_str(), this->_data_to_send.top().size(), 0);
             if (sent_bytes < 0)
+            {
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Send to socket " << of.getSocket() << " failed with error: " << std::strerror(errno))
                 throw client_type::SendException();
+            }
             else if (sent_bytes == 0)
             {
-                std::cerr << "fd_set was set for sending however no data is provider to send." << std::endl;
+                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data to socket " << of.getSocket());
                 return (false);
             }
             else if ((size_t)sent_bytes != this->_data_to_send.top().size())
             {
-                std::cout << "sent data was cropped (sent " << sent_bytes << " bytes of " << this->_data_to_send.top().size() << " total bytes)" << std::endl;
                 std::string left = this->_data_to_send.top().substr(sent_bytes, this->_data_to_send.top().length());
                 this->_data_to_send.pop();
                 this->_data_to_send.push(left);   
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent to socket " << of.getSocket()<< " was cropped for socket " << of.getSocket() << ": " << of._data_to_send.top().length() << " bytes left to send");
                 return (false);
             }
             // sent full packet.
