@@ -1,6 +1,7 @@
 # include "Taskmaster.hpp"
 # include "cpp_argparse.hpp"
 # include "net/server.hpp"
+# include "dto.hpp"
 
 //DONE implement logging to files
 //DONE Finish to well format the LOGs
@@ -14,6 +15,43 @@
 //TODO Code a client with the grfic library FTXUI
 // TODO ptrace on ourselves to avoid process monitoring
 // TODO parse config file at start to have color enabled on every log
+
+
+class ClientData
+{
+	public:
+		// independant data storage for every client
+		bool	asked_status = false;
+};
+
+class TaskmasterClientsHandler : public ServerClientHandler<TaskmasterClientsHandler, ClientData>
+{
+    public:
+        TaskmasterClientsHandler(server_type& server)
+        : handler_type(server)
+        {}
+
+        void declareMessages()
+        {
+            this->server.onMessage("status", 
+                server_type::make_handler<StatusDTO>([](server_type& server, client_type& client, DTO* dto)
+                {
+                    // always safe
+					StatusDTO* status = reinterpret_cast<StatusDTO*>(dto);
+					
+					client.asked_status = status->value;
+					LOG_INFO(LOG_CATEGORY_NETWORK, "Received status with value of " << status->value << ", sending back value 42");
+
+					// resending back packet with different value
+					status->value = 42;
+					server.emit("status_response", *status, client);
+				}
+            ));
+        }
+};
+
+
+
 
 
 void	signal_handler(int signal)
@@ -56,8 +94,35 @@ int	init_signals(struct sigaction *sa)
 
 int main(int ac, char** av)
 {
-	(void)ac;
-	(void)av;
+	bool		help = false;
+
+	std::string	serverIp;
+	int			serverPort;
+
+	ARG_INIT(
+		ARG_GROUP("server", "Daemonized server running taskmaster",
+			ARG<std::string>("-i", "--ip", "ip address of taskmaster server", &serverIp, ARG_REQUIRED),
+			ARG<int>("-p", "--port", "port of taskmaster server", &serverPort, ARG_REQUIRED)
+		),
+		ARG_NOVALUE("-h", "--help", "shows this usage", &help)
+	);
+
+
+	int parsing_failed = ARG_PARSE(ac, av);
+	if (parsing_failed)
+	{
+		ARG_USAGE(" === Taskmaster Server ===");
+		return (EXIT_FAILURE);
+	}
+	if (help)
+	{
+		ARG_USAGE(" === Taskmaster Server ===");
+		return (EXIT_SUCCESS);
+	}
+
+
+
+
 	struct sigaction sa;
 	Taskmaster *TM = Taskmaster::GetInstance();
 
@@ -68,10 +133,7 @@ int main(int ac, char** av)
 
 	if (TM->isRunningRootPermissions() == false)
 	{
-		LOG_DEBUG(LOG_CATEGORY_INIT, "You must haved to run this program.")
-		LOG_WARN(LOG_CATEGORY_DEFAULT, "You must have root permissions to run this program.")
-		LOG_ERROR(LOG_CATEGORY_INIT, "You must have root pdsffsdfsdsdfssfdermissions to run this program.")
-		LOG_CRITICAL(LOG_CATEGORY_NETWORK, "A big network error have root pdsffsdfsdsdfssfdermissions to run this program.")
+		LOG_ERROR(LOG_CATEGORY_INIT, "You must have root permissions to run this program.")
 		return EXIT_FAILURE;
 	}
 
@@ -92,14 +154,16 @@ int main(int ac, char** av)
 	}
 
 	TM->loadConfigFile(TM_DEF_CONFIGPATH);
-	
+
+	Server<TaskmasterClientsHandler>	*server = new Server<TaskmasterClientsHandler>(serverIp, serverPort);
+	server->start_listening();
+
 	// Here start to daemonize
-	int i = 0;
-	while (i < 60000)
+	do
 	{
-		usleep(100);
-		i++;
+		// do taskmaster things...
 	}
+	while (server->wait_update());
 
 	TM->exitProperly();
 	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
