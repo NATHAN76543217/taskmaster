@@ -238,11 +238,14 @@ class Server
                 this->_accept();
             }
 
-            // look for connections on ipv6 
-            if (FD_ISSET(this->_socket6, &selected_read_fds))
+            if (this->enable_IPv6)
             {
-                // client tries to connect
-                this->_accept6();
+                // look for connections on ipv6 
+                if (FD_ISSET(this->_socket6, &selected_read_fds))
+                {
+                    // client tries to connect
+                    this->_accept6();
+                }
             }
 
             return (running);
@@ -318,7 +321,7 @@ class Server
         /* emit_now emits the same way emit does, however it doesn't wait for wait_update() to be sent   */
         /* this is usefull for errors or for emitting something before calling disconnect()              */
         /* however the client's socket might not be able to receive the packet at the moment it is sent  */
-        /* in that case, the package isn't queued and emit_now returns false indicating a failure        */
+        /* in that case, the package is queued and emit_now returns false indicating a failure           */
         /* same thing if send wasn't able to send the packet entierely, emit_now returns false           */
         /* ! IT WILL NOT SEND THE LEFTOVER PACKET IF IT WASN'T ABLE TO SENT IT ENTIERLY !                */
         /* for that reason, it should be used to send small data structures to ensure data packages are  */

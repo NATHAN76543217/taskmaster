@@ -112,6 +112,7 @@ class Client : public H::client_data_type, protected PacketManager
             
             FD_SET(this->_socket, &this->_read_fd);
             this->_handler.onConnected();
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on address " << this->server_ip << " on port " << this->server_port);
         }
 
 
@@ -173,17 +174,17 @@ class Client : public H::client_data_type, protected PacketManager
         typedef std::map<std::string, message_handler_type> msg_list_type;
 
 
-        void    onMessage(const std::string& message_name, const message_handler_type& handler)
+        void    onMessage(const std::string& name, const message_handler_type& handler)
         {
             // todo see properly why sizeof(packed_data_header<0>::message_name) is not accessible in client 
             // but accessible in server
-            if (message_name.length() > (sizeof(packed_data_header<0>) - sizeof(size_t)))
+            if (name.length() > (sizeof(packed_data_header<0>) - sizeof(size_t)))
             {
                 LOG_ERROR(LOG_CATEGORY_INIT, "cannot add handler for `" << name << "` message: name is too long (" 
-                    << sizeof(packed_data_header<0>::message_name) << " max)");  
+                    << (sizeof(packed_data_header<0>) - sizeof(size_t)) << " max)");  
                 return ;
             }
-            this->_messages_handlers.insert(std::make_pair(message_name, handler));
+            this->_messages_handlers.insert(std::make_pair(name, handler));
             LOG_INFO(LOG_CATEGORY_INIT, "added new handler for `" << name << "` message");
         }
 
@@ -288,7 +289,7 @@ class Client : public H::client_data_type, protected PacketManager
                 }
                 if (handler->second.sizeof_type != data_header.data_size)
                 {
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` received on socket " << from.getSocket() << " doesnt correspond with current message packet type definition: expected a data containing " 
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` doesnt correspond with current message packet type definition: expected a data containing " 
                     << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes");
                     return (true);
                 }
@@ -345,12 +346,12 @@ class Client : public H::client_data_type, protected PacketManager
             ssize_t sent_bytes = send(this->_socket, this->_data_to_send.top().c_str(), this->_data_to_send.top().size(), 0);
             if (sent_bytes < 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Send to socket " << of.getSocket() << " failed with error: " << std::strerror(errno))
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Send failed with error: " << std::strerror(errno))
                 throw client_type::SendException();
             }
             else if (sent_bytes == 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data to socket " << of.getSocket());
+                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data");
                 return (false);
             }
             else if ((size_t)sent_bytes != this->_data_to_send.top().size())
@@ -358,7 +359,7 @@ class Client : public H::client_data_type, protected PacketManager
                 std::string left = this->_data_to_send.top().substr(sent_bytes, this->_data_to_send.top().length());
                 this->_data_to_send.pop();
                 this->_data_to_send.push(left);   
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent to socket " << of.getSocket()<< " was cropped for socket " << of.getSocket() << ": " << of._data_to_send.top().length() << " bytes left to send");
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent was cropped " << ": " << this->_data_to_send.top().length() << " bytes left to send");
                 return (false);
             }
             // sent full packet.
