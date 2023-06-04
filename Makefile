@@ -36,7 +36,8 @@ LOG_DIR		= logs
 SRCS_SERVER		=	main.cpp Tintin_reporter.cpp Config.cpp
 SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
  
-HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp
+HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp \
+					client.hpp dto_base.hpp packet_data.hpp packet.hpp server.hpp
 
 
 CPP_DBG_FLAGS		=	#-g3 -fsanitize=address
@@ -52,6 +53,9 @@ SERVER_OBJS		 =	$(addprefix $(BIN_DIR)/, $(SERVER_SRC_FILES:.cpp=.o))
 CPP_INC_FLAGS	+=	$(addprefix -I,$(shell echo $(HEADER_FILES) | tr ' ' '\n' | rev | cut -d'/' -f2- | rev | sort | uniq))
 C_LFLAG		+=	$(addprefix -L,$(addprefix $(LIB_DIR), $(LIBRARIES)))
 
+$(NAME_CLIENT)_OBJS = $(CLIENT_OBJS)
+$(NAME_SERVER)_OBJS = $(SERVER_OBJS)
+
 # include prefix definitions
 include fancyPrefix.mk
 
@@ -62,25 +66,26 @@ include detectOs.mk
 include libraries.mk
 
 #   Main rule
-all: client server
+all: display_os client server
 	@ echo "$(PREFIX_INFO) all done."
 
 # Server rule, for making server only
-server: OBJS = $(SERVER_OBJS)
 server: NAME = $(NAME_SERVER)
 server: SRC_FILES = $(SERVER_SRC_FILES)
 server: SRC_DIR = $(SERVER_SRC_DIR)
-server: display_os init_lib check_headers check_sources $(BIN_DIR) $(SERVER_OBJS) $(NAME_SERVER)
+server: display_os init_lib check_headers check_sources $(NAME_SERVER)
+	@ echo "$(PREFIX_INFO) All done for server"
 
 # Client rule, for making client only
-client: OBJS = $(CLIENT_OBJS)
 client: NAME = $(NAME_CLIENT)
 client: SRC_FILES = $(CLIENT_SRC_FILES)
 client: SRC_DIR = $(CLIENT_SRC_DIR)
-client: display_os init_lib check_headers check_sources $(BIN_DIR) $(CLIENT_OBJS) $(NAME_CLIENT)
+client: display_os init_lib check_headers check_sources $(NAME_CLIENT)
+	@ echo "$(PREFIX_INFO) All done for client"
 
 # Initializes libraries for both client and server here
 init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB)
+
 
 # include display_os
 include displayOs.mk
@@ -185,11 +190,19 @@ uninstall_argparse:
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib header cpp_argparse.hpp ..."
 
 
+# Objs dependency for client/server & linking rule
 
-# Linking rule
-$(TARGET):
+$(NAME_CLIENT):  OBJS = $($(NAME_CLIENT)_OBJS)
+$(NAME_CLIENT):  $(BIN_DIR) $($(NAME_CLIENT)_OBJS)
 	@ $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(OBJS) -o $@ $(CPP_LNK_FLAGS)
 	@ echo "$(PREFIX_LINK) Linking done for: $@"
+
+$(NAME_SERVER):  OBJS = $($(NAME_SERVER)_OBJS)
+$(NAME_SERVER):  $(BIN_DIR) $($(NAME_SERVER)_OBJS)
+	@ $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(OBJS) -o $@ $(CPP_LNK_FLAGS)
+	@ echo "$(PREFIX_LINK) Linking done for: $@"
+
+
 
 #	Bin directory
 $(BIN_DIR):
