@@ -556,6 +556,10 @@ class Server
                 std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
                 data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
 
+                // check message name character conformity
+                if (!is_valid_message_name(data_header))
+                    return (true);
+
                 // check message validity
                 std::string message_name(data_header.message_name, std::strlen(data_header.message_name));
                 handler = this->_messages_handlers.find(message_name);

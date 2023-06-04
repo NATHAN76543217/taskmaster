@@ -5,12 +5,13 @@
 #include <ostream>
 #include <exception>
 
-class UnpackException : std::exception
+
+class InvalidPacketException : std::exception
 {
     public:
         const char *what() const noexcept
         {
-            return ("unpacking of packet failed");
+            return ("Invalid packet");
         }
 };
 
@@ -38,8 +39,37 @@ packed_data<S> pack_data(const std::string& message_name, const T& data)
 
     std::strncpy(pack.header.message_name, message_name.c_str(), 32);
     pack.header.data_size = sizeof(T);
+    if (!is_valid_message_name(pack.header))
+    {
+        throw InvalidPacketException();
+    }
     serialize(data, (uint8_t*)pack.data);
     return (pack);
+}
+
+template<size_t S>
+bool        is_valid_message_name(const packed_data_header<S>& pack)
+{
+    size_t i = 0;
+    while (i < sizeof(packed_data_header<S>::message_name))
+    {
+        if (
+            // is numeric check
+            !(pack.message_name[i] < '0' || pack.message_name[i] > '9')
+            // is alpha check
+         && !(pack.message_name[i] < 'a' || pack.message_name[i] > 'z')
+         && !(pack.message_name[i] < 'A' || pack.message_name[i] > 'Z')
+            // other allowed special characters
+         && !(pack.message_name[i] == '_' || pack.message_name[i] == '-' || pack.message_name[i] == '/')
+        )
+        {
+            // invalid character
+            return (false);
+        }
+        ++i;
+    }
+
+    return (true);
 }
 
 
