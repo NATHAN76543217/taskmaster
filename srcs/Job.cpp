@@ -79,7 +79,8 @@ Job &				Job::operator=( Job const & rhs )
 
 std::ostream &			operator<<( std::ostream & o, Job const & i )
 {
-	o << "Job '" << i.getName() << ":" << std::endl;
+	o << "Job config:" << std::endl;
+	o << " - name : " << i.getName() << std::endl;
 	o << " - cmd : " << i.getCmd() << std::endl;
 	o << " - nbprocs : " << i.getNbProcs() << std::endl;
 	o << " - umask : " << i.getUmask() << std::endl;

@@ -67,17 +67,16 @@ int main(int ac, char** av)
 
 #if LOG_CATEGORY_AUTO == false
 	TM->initCategories();
-	std::cout << Tintin_reporter::getLogManager() << std::endl;
+	// std::cout << Tintin_reporter::getLogManager() << std::endl;
+	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::getLogManager())
+
 # else
 	Tintin_reporter::getLogManager("./default.log");
 #endif
 
 	if (TM->isRunningRootPermissions() == false)
 	{
-		LOG_DEBUG(LOG_CATEGORY_INIT, "You must haved to run this program.")
-		LOG_WARN(LOG_CATEGORY_DEFAULT, "You must have root permissions to run this program.")
-		LOG_ERROR(LOG_CATEGORY_INIT, "You must have root pdsffsdfsdsdfssfdermissions to run this program.")
-		LOG_CRITICAL(LOG_CATEGORY_NETWORK, "A big network error have root pdsffsdfsdsdfssfdermissions to run this program.")
+		LOG_CRITICAL(LOG_CATEGORY_INIT, "You must have root permissions to run this program.")
 		return EXIT_FAILURE;
 	}
 
@@ -108,7 +107,7 @@ int main(int ac, char** av)
 	std::cout << "=== JOBS ===" << std::endl;
 	for (std::list<Job>::const_iterator it = TM->_joblist.begin(); it != TM->_joblist.end(); it++)
 	{
-		std::cout << *it;
+		LOG_DEBUG(LOG_CATEGORY_JOB, *it);
 	}
 	// Here start to daemonize
 	int i = 0;

@@ -29,11 +29,13 @@ bool		Taskmaster::isRunningRootPermissions( void ) const
 void		Taskmaster::initCategories( void ) const
 {
 	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
+	// Tintin_reporter::getLogManager(LOG_STDOUT_MAGIC).addCategory(LOG_CATEGORY_DEFAULT);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_LOGGER, LOG_STDOUT_MAGIC);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JOB);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JOB, LOG_STDOUT_MAGIC);
 }
 
 

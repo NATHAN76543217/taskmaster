@@ -1,5 +1,6 @@
 #include "Tintin_reporter.hpp"
-
+//TODO Improve verbose: say 'new' when new category and say 'set' when relink category (do the same for files)
+//TODO optimize between addCategpry and addDefaultCategory
 Tintin_reporter *Tintin_reporter::_logManager = nullptr;
 
 /*
@@ -27,7 +28,7 @@ Tintin_reporter::~Tintin_reporter()
 			continue;
 		if (it->second.is_file == true)
 		{
-			LOG_DEBUG(LOG_CATEGORY_LOGGER, "Closing file'" + it->first + "'.")
+			LOG_DEBUG(LOG_CATEGORY_LOGGER, "Closing file '" + it->first + "'.")
 			static_cast<std::ofstream &>(it->second.output).close();
 			delete &(it->second.output);
 		}
@@ -36,7 +37,7 @@ Tintin_reporter::~Tintin_reporter()
 	Tintin_reporter::log_destination &default_destination = this->_opened_files.at(this->_categories.at(this->_defaultCategory).filename);
 	if (default_destination.is_file == true)
 	{
-		LOG_DEBUG(LOG_CATEGORY_LOGGER, "Closing file'" + this->_categories.at(this->_defaultCategory).filename + "'.")
+		LOG_DEBUG(LOG_CATEGORY_LOGGER, "Closing file '" + this->_categories.at(this->_defaultCategory).filename + "'.")
 		static_cast<std::ofstream &>(default_destination.output).close();
 		delete &(default_destination.output);
 	}
@@ -50,16 +51,19 @@ std::ostream &operator<<(std::ostream &o, Tintin_reporter const &i)
 {
 	o << " --- LOGGER --- " << std::endl;
 	o << "color: " << std::boolalpha << i.getColor() << " | Categories: " << i.getNbCategories() << " | Files: " << i.getNbOpenfiles() << std::endl;
-	o << "Categories: (def: " << i.getDefaultCategory() << ")" << std::endl;
+	o << "> Categories: (def: " << i.getDefaultCategory() << ")" << std::endl;
 	for (std::map<std::string, Tintin_reporter::log_category>::const_iterator it = i.getCategoriesBegin(); it != i.getCategoriesEnd(); it++)
 	{
 		// o << "- " << std::setw(LOG_CATEGORY_NAME_MAXSIZE) << it->first << " to '" << it->second.filename << "'" << std::endl;
-		o << "- " << std::setw(LOG_CATEGORY_NAME_MAXSIZE) << it->second.name << " to '" << it->second.filename << "'" << std::endl;
+		o << " - " << std::setw(LOG_CATEGORY_NAME_MAXSIZE) << it->second.name << " to '" << it->second.filename << "'" << std::endl;
 	}
-	o << "Opened files: " << std::endl;
+	o << "> Opened files: " << std::endl;
 	for (std::map<std::string, Tintin_reporter::log_destination>::const_iterator it = i.getOpenFilesBegin(); it != i.getOpenFilesEnd(); it++)
 	{
-		o << "- isFile: " << std::boolalpha << it->second.is_file << " State: " << !it->second.output.fail() << " CatLinked: " << std::left << std::setw(3) << it->second.nb_references << " - '" << it->first << "'" << std::endl;
+		if (it->second.is_file)
+			o << " - isFile: true  State: " << !it->second.output.fail() << " CatLinked: " << std::left << std::setw(3) << it->second.nb_references << " - '" << it->first << "'" << std::endl;
+		else
+			o << " - isFile: false State: " << !it->second.output.fail() << " CatLinked: " << std::left << std::setw(3) << it->second.nb_references << " - '" << it->first << "'" << std::endl;
 	}
 	return o;
 }
@@ -74,6 +78,20 @@ std::ostream &operator<<(std::ostream &o, Tintin_reporter const &i)
 Tintin_reporter::log_destination Tintin_reporter::newLogDestination(void) const
 {
 	Tintin_reporter::log_destination dst(true, 1, static_cast<std::ostream &>(*(new std::ofstream)));
+
+	return dst;
+}
+
+Tintin_reporter::log_destination Tintin_reporter::newLogDestinationStdout(void) const
+{
+	Tintin_reporter::log_destination dst(false, 1, std::cout);
+
+	return dst;
+}
+
+Tintin_reporter::log_destination Tintin_reporter::newLogDestinationStderr(void) const
+{
+	Tintin_reporter::log_destination dst(false, 1, std::cerr);
 
 	return dst;
 }
@@ -103,23 +121,30 @@ void Tintin_reporter::addDefaultCategory(const std::string &defaultOutputFile)
 	this->_categories.insert(std::make_pair(this->_defaultCategory, category));
 
 	/* Open default file */
+	std::map<std::string, Tintin_reporter::log_destination>::iterator def_logdest;
 
-	std::map<std::string, Tintin_reporter::log_destination>::iterator def_dst = this->_opened_files.insert(std::make_pair(defaultOutputFile, newLogDestination())).first;
-	std::ofstream &dst_of = static_cast<std::ofstream &>(def_dst->second.output);
-	dst_of.open(defaultOutputFile, std::ofstream::app);
-	if (dst_of.fail())
+	if (category.filename == LOG_STDOUT_MAGIC)
+		def_logdest = this->_opened_files.insert(std::make_pair(category.filename, newLogDestinationStdout())).first;
+	else if (category.filename == LOG_STDERR_MAGIC)
+		def_logdest = this->_opened_files.insert(std::make_pair(category.filename, newLogDestinationStderr())).first;
+	else
 	{
-		this->_categories.erase(this->_defaultCategory);
-		this->_opened_files.erase(defaultOutputFile);
-		throw Tintin_reporter::defaultFileException(defaultOutputFile);
+		def_logdest = this->_opened_files.insert(std::make_pair(defaultOutputFile, newLogDestination())).first;
+		std::ofstream &dst_of = static_cast<std::ofstream &>(def_logdest->second.output);
+		dst_of.open(defaultOutputFile, std::ofstream::app);
+		if (dst_of.fail())
+		{
+			this->_categories.erase(this->_defaultCategory);
+			this->_opened_files.erase(defaultOutputFile);
+			throw Tintin_reporter::defaultFileException(defaultOutputFile);
+		}
 	}
-
 	/* Add category 'LOGGER' */
 
 	std::string loggerName = formatCategoryName(LOG_CATEGORY_LOGGER);
 	this->_categories[LOG_CATEGORY_LOGGER].name = loggerName;
 	this->_categories[LOG_CATEGORY_LOGGER].filename = defaultOutputFile;
-	def_dst->second.nb_references++;
+	def_logdest->second.nb_references++;
 	log(LOG_LEVEL_DEBUG, LOG_CATEGORY_LOGGER, "New category added '" + this->_defaultCategory + "' pointing to '" + defaultOutputFile + "'.");
 	log(LOG_LEVEL_DEBUG, LOG_CATEGORY_LOGGER, "New category added '" LOG_CATEGORY_LOGGER "' pointing to '" + defaultOutputFile + "'.");
 }
@@ -157,11 +182,27 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 	}
 
 	new_category.filename = outfile;
-	std::map<std::string, Tintin_reporter::log_destination>::iterator cat_dst = this->_opened_files.find(outfile);
-	if (cat_dst == this->_opened_files.end())
+	std::map<std::string, Tintin_reporter::log_destination>::iterator cat_dst = this->_opened_files.find(new_category.filename);
+	if (cat_dst != this->_opened_files.end())
 	{
-		/* Not already exist*/
-		cat_dst = this->_opened_files.insert(std::make_pair(outfile, newLogDestination())).first;
+		/* Destination file already exist, just link to it */
+		cat_dst->second.nb_references++;
+		LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category '" + CategoryName + "' linked to '" + new_category.filename + "'.")
+		return EXIT_SUCCESS;
+	}
+
+	/* Not already exist*/
+	if (new_category.filename == LOG_STDOUT_MAGIC)
+	{
+		this->_opened_files.insert(std::make_pair(new_category.filename, newLogDestinationStdout()));
+	}
+	else if (new_category.filename == LOG_STDERR_MAGIC)
+	{
+		this->_opened_files.insert(std::make_pair(new_category.filename, newLogDestinationStderr()));
+	}
+	else
+	{
+		cat_dst = this->_opened_files.insert(std::make_pair(new_category.filename, newLogDestination())).first;
 		std::ofstream &destination_ofstream = static_cast<std::ofstream &>(cat_dst->second.output);
 		destination_ofstream.open(outfile, std::ofstream::app);
 		if (destination_ofstream.fail())
@@ -172,11 +213,6 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 			// this->_categories[Category].name = this->_categories[this->_defaultCategory].name;
 			new_category.filename = this->_categories.at(this->_defaultCategory).filename;
 		}
-	}
-	else
-	{
-		/* Destination file already exist, just link to it */
-		cat_dst->second.nb_references++;
 	}
 	LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category added '" + CategoryName + "' pointing to '" + new_category.filename + "'.")
 	return EXIT_SUCCESS;

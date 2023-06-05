@@ -59,6 +59,9 @@
 # define LOG_LEVEL_NAME_MAXSIZE		8
 # define LOG_CATEGORY_NAME_MAXSIZE	7
 
+# define LOG_STDOUT_MAGIC 		"STDOUT"
+# define LOG_STDERR_MAGIC 		"STDERR"
+
 # define LOG_CATEGORY_DEFAULT	"DEFAULT"
 # define LOG_CATEGORY_INIT		"INIT"
 # define LOG_CATEGORY_SIGNAL	"SIGNAL"
@@ -66,19 +69,37 @@
 # define LOG_CATEGORY_CONFIG	"CONFIG"
 # define LOG_CATEGORY_JOB		"JOB"
 # define LOG_CATEGORY_LOGGER	"LOGGER"
+# define LOG_CATEGORY_STDOUT	LOG_STDOUT_MAGIC
+# define LOG_CATEGORY_STDERR	LOG_STDERR_MAGIC
 
 /* If enabled create automatically new categories without using default category */
 //TODO Change LOG_CATEGORY_AUTO with a variable
 # define LOG_CATEGORY_AUTO		false
 
-// # define LOG_MANUAL(level, category, file, log) getLogManager().level(level).category(category).tofile(file).log(log);
-# define LOG_DEBUG(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(log_message));
-# define LOG_INFO(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(log_message));
-# define LOG_WARN(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
-# define LOG_ERROR(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
-# define LOG_CRITICAL(category, log_message)	Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
+//REVIEW double set of defines for optimization 
+// LOG_DEBUG   ?
+// et
+// LOG_DEBUG_O ?
+
+// # define LOG_DEBUG(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(log_message));
+// # define LOG_INFO(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(log_message));
+// # define LOG_WARN(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
+// # define LOG_ERROR(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
+// # define LOG_CRITICAL(category, log_message)	Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
+
+# define LOG_DEBUG(category, log_message) \
+	{ std::ostringstream _s; _s << log_message; Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(_s.str())); }
+# define LOG_INFO(category, log_message) \
+	{ std::ostringstream _s; _s << log_message; Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(_s.str())); }
+# define LOG_WARN(category, log_message) \
+	{ std::ostringstream _s; _s << log_message; Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(_s.str())); }
+# define LOG_ERROR(category, log_message) \
+	{ std::ostringstream _s; _s << log_message; Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(_s.str())); }
+# define LOG_CRITICAL(category, log_message) \
+	{ std::ostringstream _s; _s << log_message; Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(_s.str())); }
 
 # define LOG_TIMESTAMP_DEFAULT 0
+
 
 class Tintin_reporter
 {
@@ -127,6 +148,8 @@ class Tintin_reporter
 		void				addDefaultCategory(const std::string & outfile);
 
 		Tintin_reporter::log_destination	newLogDestination( void ) const;
+		Tintin_reporter::log_destination	newLogDestinationStdout( void ) const;
+		Tintin_reporter::log_destination	newLogDestinationStderr( void ) const;
 
 	public:
 
