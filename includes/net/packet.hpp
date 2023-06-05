@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stack>
 #include "packed_data.hpp"
+#include "Tintin_reporter.hpp"
 
 #define MAX_PACKET_SIZE 1024
 
@@ -12,11 +13,11 @@ protected:
 
     void    _cancelPacket()
     {
+        LOG_INFO(LOG_CATEGORY_NETWORK, "cleared packet `" << this->_received_packet.message_name << "`");
         this->_received_packet.message_name = "";
         this->_received_packet.last_time_packed = (timeval){.tv_sec=0,.tv_usec=0};
         this->_received_packet.data_size = 0;
         this->_received_packet.data = "";
-        std::cout << "cleared packet" << std::endl;
     }
 
 
@@ -29,12 +30,12 @@ protected:
     {
         if (packet_hdr.data_size > MAX_PACKET_SIZE)
         {
-            std::cerr << "Invalid new packet received for message `" << packet_hdr.message_name << "`: required size too big: specified " << (packet_hdr.data_size)    << " however maximum size for a packet is  " << MAX_PACKET_SIZE << "." << std::endl;  
+            LOG_ERROR(LOG_CATEGORY_NETWORK, "Invalid new packet received for message `" << packet_hdr.message_name << "`: required size too big: specified " << (packet_hdr.data_size)    << " however maximum size for a packet is  " << MAX_PACKET_SIZE << ".");  
             return (-1);
         }
         if (buffer_size - sizeof(packet_hdr) > packet_hdr.data_size)   
         {
-            std::cerr << "Invalid new packet received for message `" << this->_received_packet.message_name << "`: size overflow: expected " << (packet_hdr.data_size)  << " got " << (buffer_size - sizeof(packet_hdr)) << "." << std::endl;
+            LOG_ERROR(LOG_CATEGORY_NETWORK, "Invalid new packet received for message `" << this->_received_packet.message_name << "`: size overflow: expected " << (packet_hdr.data_size)  << " got " << (buffer_size - sizeof(packet_hdr)) << ".");
             return -1;
         }
 
@@ -47,10 +48,10 @@ protected:
         // packet completed, needs to be flushed by _cancelPacket() call
         if (packet_hdr.data_size == buffer_size - sizeof(packet_hdr))
         {
-            std::cout << "Added new completed packet for name " << this->_received_packet.message_name << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Added new completed packet for name " << this->_received_packet.message_name);
             return (0);
         }
-        std::cout << "Added new incomplete packet for name " << this->_received_packet.message_name << ",  misses " << (this->_received_packet.data_size - this->_received_packet.data.length()) << " data bytes" << std::endl;
+        LOG_INFO(LOG_CATEGORY_NETWORK, "Added new incomplete packet for name " << this->_received_packet.message_name << ",  misses " << (this->_received_packet.data_size - this->_received_packet.data.length()) << " data bytes");
         return (1);
     }
 
@@ -62,13 +63,13 @@ protected:
     {
         if (this->_received_packet.empty())
         {
-            std::cerr << "Cannot append packet because no extra packet chunk was expected." << std::endl;
+            LOG_ERROR(LOG_CATEGORY_NETWORK, "Cannot append packet because no extra packet chunk was expected.");
             return -1;
         }
         if (buffer_size + this->_received_packet.data.length() > this->_received_packet.data_size)   
         {
             this->_cancelPacket();
-            std::cerr << "Invalid packet received for message `" << this->_received_packet.message_name << "`: size overflow: expected " << (this->_received_packet.data_size)    << " got " << (this->_received_packet.message_name.length() + buffer_size) << "." << std::endl;
+            LOG_ERROR(LOG_CATEGORY_NETWORK, "Invalid packet received for message `" << this->_received_packet.message_name << "`: size overflow: expected " << (this->_received_packet.data_size)    << " got " << (this->_received_packet.message_name.length() + buffer_size) << ".");
             return -1;
         }
         this->_received_packet.last_time_packed = (timeval){.tv_sec=0,.tv_usec=0};
@@ -76,7 +77,7 @@ protected:
 
         if (this->_received_packet.data.length() == this->_received_packet.data_size)   
         {
-            std::cerr << "Packet `" << this->_received_packet.message_name << "` received entierly." << std::endl;
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Packet `" << this->_received_packet.message_name << "` received entierly.");
             return 0;
         }
         return (1);
