@@ -302,6 +302,11 @@ class Server
                     << sizeof(packed_data_header<0>::message_name) << " max)"); 
                 return ;           
             }
+            if (!is_valid_message_name(name.c_str()))
+            {
+                LOG_ERROR(LOG_CATEGORY_INIT, "cannot add handler for `" << name << "` message: name is not valid (allowed characters are [a-z][A-Z][0-9][_,-,/,.,[,],<,>])");  
+                return ;
+            }
             this->_messages_handlers.insert(std::make_pair(name, handler));
             LOG_INFO(LOG_CATEGORY_INIT, "added new handler for `" << name << "` message");
         }
@@ -550,7 +555,7 @@ class Server
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_client_handler.onMessageMismatch(from, from._received_packet.message_name);
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << from._received_packet.message_name << "` sent on socket " << from.getSocket());
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Cannot get data handler in parsed packet for message `" << from._received_packet.message_name << "` sent on socket " << from.getSocket() << ", this should have been resolved before parsing the packet.");
                     from._cancelPacket();
                     return 0;
                 }
@@ -571,7 +576,10 @@ class Server
 
                 // check message name character conformity
                 if (!is_valid_message_name(data_header))
+                {
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet message_name format is invalid: packet ignored.");
                     return (true);
+                }
 
                 // check message validity
                 std::string message_name(data_header.message_name, std::strlen(data_header.message_name));
@@ -579,7 +587,7 @@ class Server
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_client_handler.onMessageMismatch(from, message_name);
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << from._received_packet.message_name << "` received on socket " << from.getSocket());
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << message_name << "` received on socket " << from.getSocket());
                     return 0;
                 }
                 if (handler->second.sizeof_type != data_header.data_size)

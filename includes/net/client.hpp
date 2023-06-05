@@ -117,7 +117,7 @@ class Client : public H::client_data_type, protected PacketManager
 
 
 
-        /* waits an update this the server, in the client, emits are sent on the wait_update call too */
+        /* waits an update from the server, in the client, emits are sent on the wait_update call too */
         /* returns true if the connection is still active after handling                              */
         /* If specified, a timeout argument can be set to define the timeout in ms for select         */
         bool    wait_update(const int timeout_ms = -1)
@@ -189,6 +189,11 @@ class Client : public H::client_data_type, protected PacketManager
             {
                 LOG_ERROR(LOG_CATEGORY_INIT, "cannot add handler for `" << name << "` message: name is too long (" 
                     << (sizeof(packed_data_header<0>) - sizeof(size_t)) << " max)");  
+                return ;
+            }
+            if (!is_valid_message_name(name.c_str()))
+            {
+                LOG_ERROR(LOG_CATEGORY_INIT, "cannot add handler for `" << name << "` message: name is not valid (allowed characters are [a-z][A-Z][0-9][_,-,/,.,[,],<,>])");  
                 return ;
             }
             this->_messages_handlers.insert(std::make_pair(name, handler));
@@ -263,36 +268,34 @@ class Client : public H::client_data_type, protected PacketManager
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_handler.onMessageMismatch(this->_received_packet.message_name);
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message: `" << this->_received_packet.message_name << "`");                    this->_cancelPacket();
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Cannot get data handler in parsed packet for message `" << this->_received_packet.message_name << "`, this should have been resolved before parsing the packet.");
                     return (true);
                 }
             }
             // no packet defined in client, expecting a header for inserting a new one
             else
             {
-                if ((size_t)size < sizeof(packed_data_header<0>))
+                // copy header from buffer
+                packed_data_header<0>   data_header;
+                if (!unpack_data_header(data_header, (char*)buffer, size))
                 {
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "invalid new packet size is smaller than data_header size: cannot parse packet");
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Invalid new packet size is smaller than data_header size: packet ignored.");
                     return (true);
                 }
 
-                // copy header from buffer
-                packed_data_header<0>  data_header;
-                if (!unpack_data_header(data_header, (char*)buffer, size))
-                // std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
-                // data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
-
                 // check message name character conformity
                 if (!is_valid_message_name(data_header))
+                {
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet message_name format is invalid: packet ignored.");
                     return (true);
-
+                }
                 // check message validity
                 std::string message_name(data_header.message_name, std::strlen(data_header.message_name));
                 handler = this->_messages_handlers.find(message_name);
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_handler.onMessageMismatch(message_name);
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message: `" << this->_received_packet.message_name << "`");                    this->_cancelPacket();
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message: `" << message_name << "`");
                     return (true);
                 }
                 if (handler->second.sizeof_type != data_header.data_size)
