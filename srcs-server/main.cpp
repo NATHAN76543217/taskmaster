@@ -155,18 +155,32 @@ int main(int ac, char** av)
 
 	TM->loadConfigFile(TM_DEF_CONFIGPATH);
 
-	Server<TaskmasterClientsHandler>	*server = new Server<TaskmasterClientsHandler>(serverIp, serverPort);
-	server->start_listening();
-
-	// Here start to daemonize
-	do
+	// TODO daemonize better than this
+	int pid = fork();
+	if (pid < 0)
 	{
-		// do taskmaster things...
+		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to initialize daemon, aborting.");
+		return (EXIT_FAILURE);
 	}
-	while (server->wait_update());
+	else if (pid == 0)
+	{
+		LOG_INFO(LOG_CATEGORY_INIT, "Started daemon");
+		
+		Server<TaskmasterClientsHandler>	*server = new Server<TaskmasterClientsHandler>(serverIp, serverPort);
+		server->start_listening();
 
-	TM->exitProperly();
-	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
+		do
+		{
+			// do taskmaster things...
+		}
+		while (server->wait_update());
 
-	return EXIT_SUCCESS;
+		TM->exitProperly();
+		LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
+
+		return EXIT_SUCCESS;
+	}
+	// also print on stdout (maybe ?)
+	std::cout << "Started daemon (" << pid<< ")" << std::endl;
+	return (EXIT_SUCCESS);
 }
