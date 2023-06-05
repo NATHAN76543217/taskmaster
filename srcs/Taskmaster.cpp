@@ -12,6 +12,20 @@ bool		Taskmaster::isRunningRootPermissions( void ) const
 	return true;	
 }
 
+// void		Taskmaster::initCategories( void ) const
+// {
+// 	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_LOGGER);
+// 	LOG_INFO(LOG_CATEGORY_DEFAULT, "FIRST WRITE TO DEFAULT")
+// 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT, "init.log");
+// 	LOG_INFO(LOG_CATEGORY_DEFAULT, "SECOND WRITE TO DEFAULT")
+// 	LOG_INFO(LOG_CATEGORY_INIT, "FIRST WRITE TO INIT")
+// 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
+// 	LOG_INFO(LOG_CATEGORY_INIT, "INIT NOW point to default")
+// 	LOG_INFO("BLABLA", "Unknown to default")
+// 	const_cast<Taskmaster*>(this)->exitProperly();
+// 	exit(0);
+// }
+
 void		Taskmaster::initCategories( void ) const
 {
 	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
@@ -36,8 +50,11 @@ int			Taskmaster::parse_arguments( void )
 
 int			Taskmaster::exitProperly( void )
 {
+	LOG_INFO(LOG_CATEGORY_INIT, "Exiting properly.")
 	this->freeLockFile();
 	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly released.")
+	LOG_INFO(LOG_CATEGORY_INIT, "Destroying logger.")
+	Tintin_reporter::destroyLogManager();
 	return EXIT_SUCCESS;
 }
 

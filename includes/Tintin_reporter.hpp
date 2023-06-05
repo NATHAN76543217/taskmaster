@@ -3,6 +3,7 @@
 
 # include <iomanip>
 # include <iostream>
+# include <ostream>
 # include <fstream>
 # include <string>
 # include <map>
@@ -40,11 +41,16 @@
 # define LOG_LEVEL_CRITICAL_MSG_COLOR "\033[38;2;250;190;80m"
 
 // define prefix structure here
-# define LOG_LEVEL_DEBUG_MSG		"[" LOG_LEVEL_DEBUG_COLOR "DEBUG" RESET_ANSI "]  - " LOG_LEVEL_DEBUG_MSG_COLOR
-# define LOG_LEVEL_INFO_MSG			"[" LOG_LEVEL_INFO_COLOR "INFO" RESET_ANSI "]   - " LOG_LEVEL_INFO_MSG_COLOR
-# define LOG_LEVEL_WARNING_MSG		"[" LOG_LEVEL_WARNING_COLOR "WARN" RESET_ANSI "]   - " LOG_LEVEL_WARNING_MSG_COLOR
-# define LOG_LEVEL_ERROR_MSG		"[" LOG_LEVEL_ERROR_COLOR "ERROR" RESET_ANSI "]  - " LOG_LEVEL_ERROR_MSG_COLOR
-# define LOG_LEVEL_CRITICAL_MSG		"[" LOG_LEVEL_CRITICAL_COLOR "CRITIC" RESET_ANSI "] - " LOG_LEVEL_CRITICAL_MSG_COLOR
+# define LOG_LEVEL_PREFIX_DEBUG				" [" LOG_LEVEL_DEBUG_COLOR "DEBUG" RESET_ANSI "]  - " LOG_LEVEL_DEBUG_MSG_COLOR
+# define LOG_LEVEL_PREFIX_INFO				" [" LOG_LEVEL_INFO_COLOR "INFO" RESET_ANSI "]   - " LOG_LEVEL_INFO_MSG_COLOR
+# define LOG_LEVEL_PREFIX_WARNING			" [" LOG_LEVEL_WARNING_COLOR "WARN" RESET_ANSI "]   - " LOG_LEVEL_WARNING_MSG_COLOR
+# define LOG_LEVEL_PREFIX_ERROR				" [" LOG_LEVEL_ERROR_COLOR "ERROR" RESET_ANSI "]  - " LOG_LEVEL_ERROR_MSG_COLOR
+# define LOG_LEVEL_PREFIX_CRITICAL			" [" LOG_LEVEL_CRITICAL_COLOR "CRITIC" RESET_ANSI "] - " LOG_LEVEL_CRITICAL_MSG_COLOR
+# define LOG_LEVEL_PREFIX_DEBUG_NOCOLOR		" [DEBUG]  - "
+# define LOG_LEVEL_PREFIX_INFO_NOCOLOR		" [INFO]   - "
+# define LOG_LEVEL_PREFIX_WARNING_NOCOLOR	" [WARN]   - "
+# define LOG_LEVEL_PREFIX_ERROR_NOCOLOR		" [ERROR]  - "
+# define LOG_LEVEL_PREFIX_CRITICAL_NOCOLOR	" [CRITIC] - "
 
 
 // define timestamp color here
@@ -59,81 +65,137 @@
 # define LOG_CATEGORY_NETWORK	"NETWORKING"
 # define LOG_CATEGORY_CONFIG	"CONFIG"
 # define LOG_CATEGORY_JOB		"JOB"
+# define LOG_CATEGORY_LOGGER	"LOGGER"
 
-/* If enabled create automatically new categories without throwing an exception */
+/* If enabled create automatically new categories without using default category */
+//TODO Change LOG_CATEGORY_AUTO with a variable
 # define LOG_CATEGORY_AUTO		false
 
 // # define LOG_MANUAL(level, category, file, log) getLogManager().level(level).category(category).tofile(file).log(log);
-# define LOG_DEBUG(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(log_message));
-# define LOG_INFO(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(log_message));
-# define LOG_WARN(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
-# define LOG_ERROR(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
-# define LOG_CRITICAL(category, log_message) Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
+# define LOG_DEBUG(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(log_message));
+# define LOG_INFO(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(log_message));
+# define LOG_WARN(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
+# define LOG_ERROR(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
+# define LOG_CRITICAL(category, log_message)	Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
 
 # define LOG_TIMESTAMP_DEFAULT 0
 
 class Tintin_reporter
 {
+	public:
+		struct log_category
+		{
+			std::string		name;
+			std::string		filename;
+		};
+
+		struct log_destination
+		{
+			log_destination(bool init_isfile, uint init_nbref, std::ostream & init_out) : 
+				is_file(init_isfile), nb_references(init_nbref), output(init_out)
+			{}
+			log_destination(const Tintin_reporter::log_destination & src) : 
+				is_file(src.is_file), nb_references(src.nb_references), output(src.output)
+			{}
+
+			bool	is_file;
+			uint	nb_references;
+			std::ostream & output;
+		};
+
 	private:
 		Tintin_reporter(const std::string & defaultFile);
 		~Tintin_reporter();
-		
-		class Category
-		{
-			public:
-				Category() {};
-				~Category() {};
-				std::string		name;
-				std::string		filename;
-			//add FD
-		};
 
-		static Tintin_reporter*					_logManager;
-		std::map<std::string, std::ofstream*>	_opened_files;
-		std::map<std::string, Category>			_categories;
+		static Tintin_reporter*			_logManager;
 
-		std::string					_defaultFile;
-		uint						_timestamp_format;
-		uint						_color_enabled;
-		// uint						nb_categories;
 
+		std::map<std::string, log_destination>	_opened_files;
+		std::map<std::string, log_category>		_categories;
+		std::string								_defaultCategory;
+		uint									_timestamp_format;
+		uint									_color_enabled;
+
+	protected:
+
+		const std::string	getLogHead(const std::string & category) const;
+		void				log_critical(const std::string & category, const std::string & message);
+		void				log_error(const std::string & category, const std::string & message);
+		void				log_warning(const std::string & category, const std::string & message);
+		void				log_info(const std::string & category, const std::string & message);
+		void				log_debug(const std::string & category, const std::string & message);
+		void				addDefaultCategory(const std::string & outfile);
+
+		Tintin_reporter::log_destination	newLogDestination( void ) const;
 
 	public:
 
-		Tintin_reporter( Tintin_reporter & src ) = delete;
-		Tintin_reporter( Tintin_reporter const & src ) = delete;
+		Tintin_reporter( Tintin_reporter & src )							= delete;
+		Tintin_reporter( Tintin_reporter const & src )						= delete;
+		Tintin_reporter &		operator=( Tintin_reporter const & rhs )	= delete;
 
-		Tintin_reporter &		operator=( Tintin_reporter const & rhs ) = delete;
+		class emptyInitException : public std::exception
+		{
+			public:
+
+				virtual const char* what() const noexcept
+				{
+					return "No default filename provided for logger.";
+				}
+		};
+
+		class defaultFileException : public std::exception
+		{
+			private:
+				std::string _filename;
+
+			public:
+				defaultFileException(const std::string filename = "")
+				{
+					this->_filename = filename;
+				}
+
+				virtual const char* what() const noexcept
+				{
+					return std::string("Impossible to open default file '" + this->_filename + "'.").c_str();
+				}
+		};
+
 
 
 		static Tintin_reporter& getLogManager(const std::string & defaultFile = "") {
 			if (_logManager == nullptr) {
+				if (defaultFile.empty())
+					throw Tintin_reporter::emptyInitException();
 				_logManager = new Tintin_reporter(defaultFile);
 			}
 			return *_logManager;
 		}
 
-		static void	destroyLogManager( void )
+		static void				destroyLogManager( void )
 		{
 			if (_logManager != nullptr)
+			{
 				delete _logManager;
+				_logManager = nullptr;
+			}
 		}
 
+		void				setColor( bool enabled );
+		bool				getColor( void ) const;
+		const std::string&	getDefaultCategory( void ) const;
+		uint				getNbCategories( void ) const;
+		uint				getNbOpenfiles( void ) const;
+		std::string			getTimestamp( void ) const;
+		std::string			timeToString( const struct timeval & time ) const;
+		std::string			formatCategoryName( const std::string & categoryName) const;
+		int					addCategory(const std::string & str, const std::string & outfile = "");
+		void				log(uint level, const std::string & category, const std::string & message);
 
-		void			setColor( bool enabled );
-		std::string		getTimestamp( void ) const;
-		std::string		timeToString( const struct timeval & time ) const;
-		int				addCategory(const std::string & str, std::string outfile = "");
-
-		void			log(uint level, const std::string & category, const std::string & message);
-		void			log_critical(const std::string & category, const std::string & message);
-		void			log_error(const std::string & category, const std::string & message);
-		void			log_warning(const std::string & category, const std::string & message);
-		void			log_info(const std::string & category, const std::string & message);
-		void			log_debug(const std::string & category, const std::string & message);
-		const std::string	getLogHead(const std::string & category) const;
-
-	private:
+		const std::map<std::string, log_category >::const_iterator			getCategoriesBegin( void ) const;
+		const std::map<std::string, log_category >::const_iterator			getCategoriesEnd( void ) const;
+		const std::map<std::string, log_destination>::const_iterator		getOpenFilesBegin( void ) const;
+		const std::map<std::string, log_destination>::const_iterator		getOpenFilesEnd( void ) const;
 
 };
 

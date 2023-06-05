@@ -4,9 +4,10 @@
 //DONE Finish to well format the LOGs
 //DONE Reload config file on SIGHUP
 //SONE Install yaml-cpp 
-//TODO Parse all config file
+//TODO Parse all server config file
+//DONE Parse all programs config file
 //DONE for logger implement defaultDestination for default output file
-//TODO add lock file 
+//DONE add lock file 
 //TODO daemonized main process 
 //TODO start childs according to config
 //TODO Code a client with the grfic library FTXUI
@@ -14,6 +15,7 @@
 // TODO parse config file at start to have color enabled on every log
 //TODO define all auto restart possible values for conf
 //TODO use strsignal to interpret signal number to signal string
+// TODO Use <chrono> in all our time stuff (specialy timestamp)
 
 void	signal_handler(int signal)
 {
@@ -24,6 +26,8 @@ void	signal_handler(int signal)
 		LOG_WARN(LOG_CATEGORY_CONFIG, "SIGHUP received: Reload config")
 		Taskmaster::GetInstance()->reloadConfigFile();
 	}
+	//TODO catch sigchld for processes
+	
 	// exit(0);
 }
 
@@ -63,6 +67,9 @@ int main(int ac, char** av)
 
 #if LOG_CATEGORY_AUTO == false
 	TM->initCategories();
+	std::cout << Tintin_reporter::getLogManager() << std::endl;
+# else
+	Tintin_reporter::getLogManager("./default.log");
 #endif
 
 	if (TM->isRunningRootPermissions() == false)
@@ -111,8 +118,8 @@ int main(int ac, char** av)
 		i++;
 	}
 
-	TM->exitProperly();
-	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
+	// Start all jobs here
 
+	TM->exitProperly();
 	return EXIT_SUCCESS;
 }
