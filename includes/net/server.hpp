@@ -75,7 +75,6 @@ class ServerClientHandler
 
         virtual void    onConnected(client_type& client, const struct sockaddr_in& client_address) { (void)client; (void)client_address; };
         virtual void    onConnectedIPv6(client_type& client, const struct sockaddr_in6& client_address) { (void)client; (void)client_address; };
-        // super.onDisconnected() must be called if overrided
         virtual void    onDisconnected(client_type& client) { (void)client; };
 
         // called when an user tried to send data on message but data type mismatched.
@@ -92,7 +91,7 @@ class ServerClientHandler
 class DefaultClientData
 {
     // data per client
-    std::string name;
+    // std::string name;
     // ...
 };
 
@@ -229,7 +228,7 @@ class Server
                 // received from client
                 if (FD_ISSET(it->second.getSocket(), &selected_read_fds))
                 {
-                    if (this->_receive(it->second) != 0)
+                    if (this->_receive(it->second) == false)
                         break ; // sent disconnect
                     if (!running)
                         return (false); 
@@ -271,7 +270,7 @@ class Server
         struct functor_handler
         {
             size_t  sizeof_type;
-            void(*handler)(server_type&, client_type&, DTO*);
+            void(*handle)(server_type&, client_type&, DTO*);
         };
 
         template<typename T>
@@ -279,7 +278,7 @@ class Server
         {
             functor_handler handler;
             handler.sizeof_type = sizeof(T);
-            handler.handler = handler_function;
+            handler.handle = handler_function;
             return (handler);
         }
 
@@ -517,22 +516,14 @@ class Server
 
 // must at least be sizeof(packet_data_header) (or sizeof(size_t) + 32)
 #define RECV_BLK_SIZE   1024
-        struct ExampleType
-        {
-            int a;
-            int b;
-            char name[23];
-        };
-
-        // todo proper error handeling
-        int     _receive(client_type& from)
+        bool     _receive(client_type& from)
         {
             uint8_t buffer[RECV_BLK_SIZE] = {0};
             ssize_t size = recv(from.getSocket(), buffer, RECV_BLK_SIZE, MSG_DONTWAIT);
             if (size == 0)
             {
                 this->disconnect(from);
-                return (1);
+                return (false);
             }
             else if (size < 0)
             {
@@ -549,7 +540,7 @@ class Server
                 int append_result = from._appendPacket(buffer, size);
                 
                 if (append_result != 0)
-                    return (0); // packet is incomplete, or error, needs more data chunks
+                    return (true); // packet is incomplete, or error, needs more data chunks
                 // packet complete
                 handler = this->_messages_handlers.find(from._received_packet.message_name);
                 if (handler == this->_messages_handlers.end())
@@ -557,7 +548,7 @@ class Server
                     this->_client_handler.onMessageMismatch(from, from._received_packet.message_name);
                     LOG_ERROR(LOG_CATEGORY_NETWORK, "Cannot get data handler in parsed packet for message `" << from._received_packet.message_name << "` sent on socket " << from.getSocket() << ", this should have been resolved before parsing the packet.");
                     from._cancelPacket();
-                    return 0;
+                    return (true);
                 }
             }
             // no packet defined in client, expecting a header for inserting a new one
@@ -566,12 +557,10 @@ class Server
 
                 // copy header from buffer
                 packed_data_header<0>  data_header;
-                // std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
-                // data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
                 if (!unpack_data_header(data_header, (char*)buffer, size))
                 {
                     LOG_WARN(LOG_CATEGORY_NETWORK, "Invalid new packet from socket " << from.getSocket() << " packet size is smaller than data_header size: cannot parse packet");
-                    return 0;
+                    return (true);
                 }
 
                 // check message name character conformity
@@ -588,41 +577,49 @@ class Server
                 {
                     this->_client_handler.onMessageMismatch(from, message_name);
                     LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << message_name << "` received on socket " << from.getSocket());
-                    return 0;
+                    return (true);
                 }
                 if (handler->second.sizeof_type != data_header.data_size)
                 {
                     LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` received on socket " << from.getSocket() << " doesnt correspond with current message packet type definition: expected a data containing " 
                     << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes");
-                    return (0);
+                    return (true);
                 }
 
                 // create new packet in client _received_packet in case of incomplete packet
                 int new_packet_result = from._newPacket(data_header, buffer, size);
                 if (new_packet_result < 0)
-                    return (0); // error on packet.
+                    return (true); // error on packet.
                 else if (new_packet_result == 1) // packet is incomplete, needs more data chunks
-                    return (0);
+                    return (true);
                 // packet complete
             }
 
-            // packet handling
-        
+            return (this->_handle_packet(from, handler->second));
+        }
+
+
+        /* ================================================ */
+        /* Packet handler call                              */
+        /* ================================================ */
+        bool    _handle_packet(client_type& from, const message_handler_type handler)
+        {
             // this should never happen but must be here for security
-            if (handler->second.sizeof_type != from._received_packet.data_size)
+            if (handler.sizeof_type != from._received_packet.data_size)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Parsed packet received on socket " << from.getSocket() << " size doesn't correspond to size in handler !!!");
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Parsed packet received on socket " << from.getSocket() << " size doesn't correspond to size in handler !!!");
                 from._cancelPacket();
-                return (0);
+                return (true);
             }
 
             // get previous client count and socket of handeled client
             int clients_count = this->n_clients_connected;
             int client_socket = from.getSocket();
 
-            uint8_t data_buffer[handler->second.sizeof_type];
-            std::memcpy(data_buffer, from._received_packet.data.c_str(), handler->second.sizeof_type);
-            handler->second.handler(*this, from, reinterpret_cast<DTO*>(data_buffer));
+            // handlex
+            uint8_t data_buffer[handler.sizeof_type];
+            std::memcpy(data_buffer, from._received_packet.data.c_str(), handler.sizeof_type);
+            handler.handle(*this, from, reinterpret_cast<DTO*>(data_buffer));
 
             // client list has changed in handler, in that case, from may have become invalid
             if (clients_count != this->n_clients_connected)
@@ -634,18 +631,16 @@ class Server
                     from._cancelPacket();
                 }
                 
-                // return 1 anyway because we have to break the loop to avoid an invalid iterator
-                return (1);
+                // return false anyway because we have to break the client loop to avoid an invalid iterator
+                // ( in Server<...>::wait_update() )
+                return (false);
             }
 
             // handeled packet needs to be cleared
             from._cancelPacket();
 
-            return (0);
+            return (true);
         }
-
-
-
 
 
 
@@ -659,14 +654,14 @@ class Server
             packed_data<S> pack = pack_data<T>(message, to_emit);
             char    data_buffer[sizeof(packed_data<S>)] = {0};
 
-            serialize(pack, (uint8_t*)data_buffer);
+            std::memcpy(data_buffer, &pack, sizeof(data_buffer));
             client._data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
             FD_SET(client.getSocket(), &this->_write_fds);   
         }
 
 
         /* ================================================ */
-        /* Send                                             */
+        /* Send data                                        */
         /* ================================================ */
 
         bool    _send_data(client_type& of)
@@ -829,7 +824,7 @@ class Server
 
     private:
 
-        H               _client_handler;
+        handler_type    _client_handler;
 
         fd_set          _read_fds;
         fd_set          _write_fds;

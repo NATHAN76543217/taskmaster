@@ -43,7 +43,7 @@ packed_data<S> pack_data(const std::string& message_name, const T& data)
     {
         throw InvalidPacketException();
     }
-    serialize(data, (uint8_t*)pack.data);
+    std::memcpy(pack.data, &data, S);
     return (pack);
 }
 
@@ -101,41 +101,4 @@ template<std::size_t S>
 bool        is_valid_message_name(const packed_data_header<S>& pack)
 {
     return (is_valid_message_name(pack.message_name));
-}
-
-
-
-
-
-// serialization doesnt take in charge network byte order : todo
-
-// SERIALIZATION/DESERIALIZATION IN BUFFER
-
-template<typename T>
-void serialize(const T& t, uint8_t buffer[sizeof(T)])
-{
-    static const size_t _size = sizeof(T);
-
-    uint8_t *ptr = (uint8_t*)(&t);
-    size_t i = 0;
-    
-    while (i < _size)
-    {
-        buffer[i] = ((uint8_t)ptr[i]);
-        ++i;
-    }
-}
-
-
-template<typename T, typename std::size_t S = sizeof(T)>
-void    deserialize(T *obj, const uint8_t buffer[S])
-{
-    uint8_t *ptr = (uint8_t*)obj;
-    size_t i = 0;
-
-    while (i < S)
-    {
-        ptr[i] = (uint8_t)buffer[i];    
-        ++i;
-    }
 }

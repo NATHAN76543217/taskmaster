@@ -164,7 +164,7 @@ class Client : public H::client_data_type, protected PacketManager
         struct functor_handler
         {
             size_t  sizeof_type;
-            void(*handler)(client_type&, DTO*);
+            void(*handle)(client_type&, DTO*);
         };
 
         template<typename T>
@@ -172,7 +172,7 @@ class Client : public H::client_data_type, protected PacketManager
         {
             functor_handler handler;
             handler.sizeof_type = sizeof(T);
-            handler.handler = handler_function;
+            handler.handle = handler_function;
             return (handler);
         }
 
@@ -314,18 +314,28 @@ class Client : public H::client_data_type, protected PacketManager
                 // packet complete
             }
 
-            // packet handling
-        
-            if (handler->second.sizeof_type != this->_received_packet.data_size)
+            return (this->_handle_packet(handler->second));
+        }
+
+
+        message_handler_type    _get_handler()
+        {
+            
+        }
+
+
+        bool    _handle_packet(const message_handler_type& handler)
+        {
+            if (handler.sizeof_type != this->_received_packet.data_size)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Parsed packet size doesn't correspond to size in handler !!!");
                 this->_cancelPacket();
                 return (true);
             }
 
-            uint8_t data_buffer[handler->second.sizeof_type];
-            std::memcpy(data_buffer, this->_received_packet.data.c_str(), handler->second.sizeof_type);
-            handler->second.handler(*this, reinterpret_cast<DTO*>(data_buffer));
+            uint8_t data_buffer[handler.sizeof_type];
+            std::memcpy(data_buffer, this->_received_packet.data.c_str(), handler.sizeof_type);
+            handler.handle(*this, reinterpret_cast<DTO*>(data_buffer));
 
             // handeled packet needs to be cleared
             this->_cancelPacket();
@@ -341,7 +351,7 @@ class Client : public H::client_data_type, protected PacketManager
             packed_data<S> pack = pack_data<T>(message, data);
             char    data_buffer[sizeof(packed_data<S>)] = {0};
 
-            serialize(pack, (uint8_t*)data_buffer);
+            std::memcpy(data_buffer, &pack, sizeof(data_buffer));
             this->_data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
             FD_SET(this->_socket, &this->_send_fd);
         }
