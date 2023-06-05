@@ -47,7 +47,26 @@ packed_data<S> pack_data(const std::string& message_name, const T& data)
     return (pack);
 }
 
-template<size_t S>
+// Data unpacker, unpacks data from header into buffer depending on buffer_size
+// buffer_size can be larger than header size however not smaller
+template<std::size_t S>
+bool   unpack_data_header(packed_data_header<S> &header, const char *buffer, const size_t buffer_size)
+{
+    if (buffer_size < sizeof(packed_data_header<S>))
+    {
+        return 0;
+    }
+
+    // copy header from buffer
+    std::memcpy(&header, buffer, sizeof(packed_data_header<S>));
+    // add trailing '\0' to message_name in case of non teminated char string
+    header.message_name[sizeof(header.message_name) - 1] = 0;
+    return (true);
+}
+
+
+
+template<std::size_t S>
 bool        is_valid_message_name(const packed_data_header<S>& pack)
 {
     size_t i = 0;
@@ -69,7 +88,8 @@ bool        is_valid_message_name(const packed_data_header<S>& pack)
         ++i;
     }
 
-    return (true);
+    //packet message name must at least be 3 character long
+    return (i >= 3);
 }
 
 
@@ -101,7 +121,7 @@ void serialize(const T& t, uint8_t buffer[sizeof(T)])
     
     while (i < _size)
     {
-        buffer[i] = ((uint16_t)ptr[i]);
+        buffer[i] = ((uint8_t)ptr[i]);
         ++i;
     }
 }
@@ -115,7 +135,7 @@ void    deserialize(T *obj, const uint8_t buffer[S])
 
     while (i < S)
     {
-        ptr[i] = (uint16_t)buffer[i];    
+        ptr[i] = (uint8_t)buffer[i];    
         ++i;
     }
 }

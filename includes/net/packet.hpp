@@ -76,7 +76,7 @@ protected:
 
         if (this->_received_packet.data.length() == this->_received_packet.data_size)   
         {
-            std::cerr << "packet received entierly " << this->_received_packet.message_name << std::endl;
+            std::cerr << "Packet `" << this->_received_packet.message_name << "` received entierly." << std::endl;
             return 0;
         }
         return (1);

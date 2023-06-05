@@ -144,7 +144,7 @@ class Server
         /* ================================================ */
 
         Server(const std::string& ip_address, const int port, const std::string& ip_address6 = "")
-        : ip_address(ip_address), ip_address6(ip_address6), port(port), running(false), enable_IPv6(!ip_address6.empty()), _client_handler(*this)
+        : ip_address(ip_address), ip_address6(ip_address6), port(port), running(false), enable_IPv6(!ip_address6.empty()), _client_handler(*this), _socket(-1), _socket6(-1)
         {
             this->_address = (sockaddr_in){
                 .sin_family = AF_INET,
@@ -198,7 +198,9 @@ class Server
         /* externally so that the data processed has less latency                    */
         /* It will also perform all the emits requested before its call              */
         /* It returns true if the server is still active after completion            */
-        bool    wait_update()
+        /* If specified, a timeout argument can be set to define the                 */
+        /* timeout in ms for select                                                  */
+        bool    wait_update(const int timeout_ms = -1)
         {
             if (!running)
                 return (false);
@@ -209,9 +211,17 @@ class Server
             FD_COPY(&this->_write_fds, &selected_write_fds);
             
             int nfds = this->_get_nfds();
-            //struct timeval timeout = {.tv_sec=10,.tv_usec=0};
-            if (select(nfds, &selected_read_fds, &selected_write_fds, NULL, (struct timeval*)NULL) == -1)
+            struct timeval *timeout_ptr = nullptr;
+            struct timeval timeout = {.tv_sec=timeout_ms / 1000,.tv_usec=(timeout_ms % 1000) * 1000};
+            if (timeout_ms != -1)
+            {
+                timeout_ptr = &timeout;
+            }
+            if (select(nfds, &selected_read_fds, &selected_write_fds, NULL, timeout_ptr) == -1)
+            {
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed: " << strerror(errno));
                 throw SelectException();
+            }
 
             // look for clients receive
             for (typename Server::client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
@@ -501,7 +511,7 @@ class Server
         /* ================================================ */
 
 // must at least be sizeof(packet_data_header) (or sizeof(size_t) + 32)
-#define RECV_BLK_SIZE   sizeof(packed_data_header<0>) + 3
+#define RECV_BLK_SIZE   1024
         struct ExampleType
         {
             int a;
@@ -548,16 +558,16 @@ class Server
             // no packet defined in client, expecting a header for inserting a new one
             else
             {
-                if ((size_t)size < sizeof(packed_data_header<0>))
+
+                // copy header from buffer
+                packed_data_header<0>  data_header;
+                // std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
+                // data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
+                if (!unpack_data_header(data_header, (char*)buffer, size))
                 {
                     LOG_WARN(LOG_CATEGORY_NETWORK, "Invalid new packet from socket " << from.getSocket() << " packet size is smaller than data_header size: cannot parse packet");
                     return 0;
                 }
-
-                // copy header from buffer
-                packed_data_header<0>  data_header;
-                std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
-                data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
 
                 // check message name character conformity
                 if (!is_valid_message_name(data_header))
@@ -710,7 +720,6 @@ class Server
             }
             return (nfds + 1);
         }
-
 
 
     /* ================================================ */

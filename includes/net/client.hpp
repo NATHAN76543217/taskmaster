@@ -119,7 +119,8 @@ class Client : public H::client_data_type, protected PacketManager
 
         /* waits an update this the server, in the client, emits are sent on the wait_update call too */
         /* returns true if the connection is still active after handling                              */
-        bool    wait_update()
+        /* If specified, a timeout argument can be set to define the timeout in ms for select         */
+        bool    wait_update(const int timeout_ms = -1)
         {
             // preserve fd sets 
             fd_set read_set;
@@ -130,7 +131,13 @@ class Client : public H::client_data_type, protected PacketManager
             FD_COPY(&this->_send_fd, &write_set);
 
             int nfds = this->_socket + 1;
-            if (select(nfds, &read_set, &write_set, 0, 0) < 0)
+            struct timeval *timeout_ptr = nullptr;
+            struct timeval timeout = {.tv_sec=timeout_ms / 1000,.tv_usec=(timeout_ms % 1000) * 1000};
+            if (timeout_ms != -1)
+            {
+                timeout_ptr = &timeout;
+            }
+            if (select(nfds, &read_set, &write_set, 0, timeout_ptr) < 0)
                 throw SelectException();
 
             // data pending to be read
@@ -271,8 +278,9 @@ class Client : public H::client_data_type, protected PacketManager
 
                 // copy header from buffer
                 packed_data_header<0>  data_header;
-                std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
-                data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
+                if (!unpack_data_header(data_header, (char*)buffer, size))
+                // std::memcpy(&data_header, buffer, sizeof(packed_data_header<0>));
+                // data_header.message_name[sizeof(data_header.message_name) - 1] = 0;
 
                 // check message name character conformity
                 if (!is_valid_message_name(data_header))
@@ -319,7 +327,7 @@ class Client : public H::client_data_type, protected PacketManager
             // handeled packet needs to be cleared
             this->_cancelPacket();
 
-            return (this->_socket != 0);
+            return (this->_socket != -1);
         }
 
 
@@ -342,6 +350,7 @@ class Client : public H::client_data_type, protected PacketManager
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending however no data is provider to send.");
                 return (false);
             }
+
             LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to server");
             ssize_t sent_bytes = send(this->_socket, this->_data_to_send.top().c_str(), this->_data_to_send.top().size(), 0);
             if (sent_bytes < 0)
