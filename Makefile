@@ -84,7 +84,7 @@ client: display_os init_lib check_headers check_sources $(NAME_CLIENT)
 	@ echo "$(PREFIX_INFO) All done for client"
 
 # Initializes libraries for both client and server here
-init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB)
+init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB) $(FTXUI_LIB)
 
 
 # include display_os
@@ -188,6 +188,23 @@ $(ARGPARSE_LIB):
 uninstall_argparse:
 	@ rm -f ./lib/cpp_argparse.hpp
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib header cpp_argparse.hpp ..."
+
+
+# Install FTXUI
+$(FTXUI_LIB):
+	@ echo "$(PREFIX_INFO) Installation de la lib FTXUI..."
+	@ git clone https://github.com/ArthurSonzogni/FTXUI.git $(FTXUI_LIB_PATH)
+	@ cd $(FTXUI_LIB_PATH) \
+		&& cmake -B build . \
+		&& cd build \
+		&& make
+	@ echo "$(PREFIX_INFO) Installation de la lib FTXUI done."
+	
+ 
+uninstall_ftxui:
+	@ rm -rf $(FTXUI_LIB_PATH)
+	@ echo "$(PREFIX_INFO) Desinstallation de la lib FTXUI done"
+
 
 
 # Objs dependency for client/server & linking rule
