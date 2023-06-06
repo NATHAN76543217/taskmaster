@@ -63,6 +63,12 @@ void	signal_handler(int signal)
 		LOG_WARN(LOG_CATEGORY_CONFIG, "SIGHUP received: Reload config")
 		Taskmaster::GetInstance()->reloadConfigFile();
 	}
+	// for developpement
+	if (signal == SIGINT)
+	{
+		Taskmaster::GetInstance()->freeLockFile();
+		exit(signal);
+	}
 	// exit(0);
 }
 
@@ -156,19 +162,20 @@ int main(int ac, char** av)
 	TM->loadConfigFile(TM_DEF_CONFIGPATH);
 
 	// TODO daemonize better than this
-	int pid = fork();
-	if (pid < 0)
-	{
-		LOG_ERROR(LOG_CATEGORY_INIT, "Failed to initialize daemon, aborting.");
-		return (EXIT_FAILURE);
-	}
-	else if (pid == 0)
-	{
+	// int pid = fork();
+	// if (pid < 0)
+	// {
+	// 	LOG_ERROR(LOG_CATEGORY_INIT, "Failed to initialize daemon, aborting.");
+	// 	return (EXIT_FAILURE);
+	// }
+	// else if (pid == 0)
+	// {
 		LOG_INFO(LOG_CATEGORY_INIT, "Started daemon");
 		
 		Server<TaskmasterClientsHandler>	*server = new Server<TaskmasterClientsHandler>(serverIp, serverPort);
+		server->ssl_cert_file = 		"./certificates/cert.pem";
+		server->ssl_private_key_file =	"./certificates/cert.pem";
 		server->start_listening();
-
 		do
 		{
 			// do taskmaster things...
@@ -178,9 +185,9 @@ int main(int ac, char** av)
 		TM->exitProperly();
 		LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
 
-		return EXIT_SUCCESS;
-	}
-	// also print on stdout (maybe ?)
-	std::cout << "Started daemon (" << pid<< ")" << std::endl;
+	//	return EXIT_SUCCESS;
+	// }
+	// // also print on stdout (maybe ?)
+	// std::cout << "Started daemon (" << pid<< ")" << std::endl;
 	return (EXIT_SUCCESS);
 }
