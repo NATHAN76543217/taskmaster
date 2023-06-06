@@ -1,5 +1,7 @@
 # include "Taskmaster.hpp"
 # include "cpp_argparse.hpp"
+
+# define ENABLE_TLS
 # include "net/server.hpp"
 # include "dto.hpp"
 
@@ -24,12 +26,18 @@ class ClientData
 		bool	asked_status = false;
 };
 
-class TaskmasterClientsHandler : public ServerClientHandler<TaskmasterClientsHandler, ClientData>
+class TaskmasterClientsManager : public ServerClientHandler<TaskmasterClientsManager, ClientData>
 {
     public:
-        TaskmasterClientsHandler(server_type& server)
+        TaskmasterClientsManager(server_type& server)
         : handler_type(server)
         {}
+
+		// void onConnected(client_type& client)
+		// {
+		// 	if (client.isSSL())
+		// 		std::cout << client.getCertificate() << std::endl;
+		// }
 
         void declareMessages()
         {
@@ -171,10 +179,11 @@ int main(int ac, char** av)
 	// else if (pid == 0)
 	// {
 		LOG_INFO(LOG_CATEGORY_INIT, "Started daemon");
-		
-		Server<TaskmasterClientsHandler>	*server = new Server<TaskmasterClientsHandler>(serverIp, serverPort);
+	
+		Server<TaskmasterClientsManager>	*server = new Server<TaskmasterClientsManager>(serverIp, serverPort);
 		server->ssl_cert_file = 		"./certificates/cert.pem";
 		server->ssl_private_key_file =	"./certificates/cert.pem";
+		
 		server->start_listening();
 		do
 		{

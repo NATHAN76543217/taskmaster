@@ -1,5 +1,7 @@
 #include <iostream>
 #include "cpp_argparse.hpp"
+
+# define ENABLE_TLS
 #include "net/client.hpp"
 #include "dto.hpp"
 
@@ -77,10 +79,12 @@ int main(int ac, char **av)
 
 
     Client<TaskmasterClientHandler> *client = new Client<TaskmasterClientHandler>(serverIp, serverPort);
+    client->enableTLS();
     client->connect();
 
     do
     {
+        std::cout << "Client loop" << std::endl;
     } while (client->wait_update());
     
     delete client;
