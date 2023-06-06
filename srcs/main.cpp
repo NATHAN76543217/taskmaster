@@ -16,7 +16,7 @@
 //TODO define all auto restart possible values for conf
 //TODO use strsignal to interpret signal number to signal string
 // TODO Use <chrono> in all our time stuff (specialy timestamp)
-
+//TODO for logger add mutex for every log_destination (with required checks) but only for files (std::cout/cerr is thread safe)
 void	signal_handler(int signal)
 {
 

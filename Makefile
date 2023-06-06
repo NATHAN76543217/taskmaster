@@ -115,7 +115,7 @@ $(YAML_LIB):
 		&& make
 # && make install
 	@ rm -rf $(LIB_DIR)/yaml.gz
-	@echo "$(PREFIX_INFO) Installation de la lib YAML done !"
+	@ echo "$(PREFIX_INFO) Installation de la lib YAML done !"
 
 uninstall_yaml_library:
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib YAML..."
@@ -154,6 +154,7 @@ $(ARGPARSE_LIB):
 uninstall_argparse:
 	@ rm -f ./lib/cpp_argparse.hpp
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib header cpp_argparse.hpp ..."
+
 
 
 

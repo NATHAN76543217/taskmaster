@@ -4,7 +4,6 @@
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
-//TODO default values are all defines
 Job::Job(): 
 _name(""), 
 _cmd(""),
