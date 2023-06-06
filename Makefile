@@ -8,12 +8,21 @@
 #
 #######################################################################
 
+# Name for both server and client executables
+NAME_SERVER	= taskmaster
+NAME_CLIENT = taskmasterctl
+
+# Default name variable, replaced by $(NAME_SERVER) or $(NAME_CLIENT) on rules server and client
+NAME 		= Taskmaster Project
+
+
 # Name of target executable
-NAME		= taskmaster
+TARGET		= $(NAME_SERVER) $(NAME_CLIENT)
 LANG		= C++
 
 # Locations 
-SRC_DIR		= srcs
+SRC_DIR_SERVER = srcs-server
+SRC_DIR_CLIENT = srcs-client
 INC_DIR		= includes
 BIN_DIR		= bin
 LIB_DIR		= lib
@@ -24,21 +33,28 @@ LOG_DIR		= logs
 # - fill only with name of the file
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
-SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Job.cpp 
-SRCS_CLIENT		=	main.cpp
+SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Config.cpp Job.cpp
+SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
  
-HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp Job.hpp tm_values.hpp
+HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp Job.hpp tm_values.hpp \
+					client.hpp dto_base.hpp packed_data.hpp packet.hpp server.hpp
 
 
 CPP_DBG_FLAGS		=	#-g3 -fsanitize=address
 CPP_CMP_FLAGS		=	-Wextra -Wall -Werror
 
 
-SRC_FILES		=	$(shell find $(SRC_DIR) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')')
-HEADER_FILES	=	$(shell find $(INC_DIR) | grep -E '$(shell echo $(HEADERS) | tr ' ' '|')')
-OBJS			=	$(addprefix $(BIN_DIR)/, $(SRC_FILES:.cpp=.o))
+
+CLIENT_SRC_FILES =	$(shell find $(SRC_DIR_CLIENT) $(SRC_DIR_SERVER) | grep -E '$(shell echo $(SRCS_CLIENT) | tr ' ' '|')' | grep -v $(SRC_DIR_SERVER)/main.cpp)
+SERVER_SRC_FILES =	$(shell find $(SRC_DIR_CLIENT) $(SRC_DIR_SERVER) | grep -E '$(shell echo $(SRCS_SERVER) | tr ' ' '|')' | grep -v $(SRC_DIR_CLIENT)/main.cpp)
+HEADER_FILES     =	$(shell find $(INC_DIR) | grep -E '$(shell echo $(HEADERS) | tr ' ' '|')')
+CLIENT_OBJS		 =	$(addprefix $(BIN_DIR)/, $(CLIENT_SRC_FILES:.cpp=.o))
+SERVER_OBJS		 =	$(addprefix $(BIN_DIR)/, $(SERVER_SRC_FILES:.cpp=.o))
 CPP_INC_FLAGS	+=	$(addprefix -I,$(shell echo $(HEADER_FILES) | tr ' ' '\n' | rev | cut -d'/' -f2- | rev | sort | uniq))
 C_LFLAG			+=	$(addprefix -L,$(addprefix $(LIB_DIR), $(LIBRARIES)))
+
+$(NAME_CLIENT)_OBJS = $(CLIENT_OBJS)
+$(NAME_SERVER)_OBJS = $(SERVER_OBJS)
 
 # include prefix definitions
 include fancyPrefix.mk
@@ -50,8 +66,26 @@ include detectOs.mk
 include libraries.mk
 
 #   Main rule
-all: display_os $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB) check_sources check_headers $(NAME)
+all: display_os client server
 	@ echo "$(PREFIX_INFO) all done."
+
+# Server rule, for making server only
+server: NAME = $(NAME_SERVER)
+server: SRC_FILES = $(SERVER_SRC_FILES)
+server: SRC_DIR = $(SERVER_SRC_DIR)
+server: display_os init_lib check_headers check_sources $(NAME_SERVER)
+	@ echo "$(PREFIX_INFO) All done for server"
+
+# Client rule, for making client only
+client: NAME = $(NAME_CLIENT)
+client: SRC_FILES = $(CLIENT_SRC_FILES)
+client: SRC_DIR = $(CLIENT_SRC_DIR)
+client: display_os init_lib check_headers check_sources $(NAME_CLIENT)
+	@ echo "$(PREFIX_INFO) All done for client"
+
+# Initializes libraries for both client and server here
+init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB)
+
 
 # include display_os
 include displayOs.mk
@@ -156,6 +190,17 @@ uninstall_argparse:
 	@ echo "$(PREFIX_INFO) Desinstallation de la lib header cpp_argparse.hpp ..."
 
 
+# Objs dependency for client/server & linking rule
+
+$(NAME_CLIENT):  OBJS = $($(NAME_CLIENT)_OBJS)
+$(NAME_CLIENT):  $(BIN_DIR) $($(NAME_CLIENT)_OBJS)
+	@ $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(OBJS) -o $@ $(CPP_LNK_FLAGS)
+	@ echo "$(PREFIX_LINK) Linking done for: $@"
+
+$(NAME_SERVER):  OBJS = $($(NAME_SERVER)_OBJS)
+$(NAME_SERVER):  $(BIN_DIR) $($(NAME_SERVER)_OBJS)
+	@ $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(OBJS) -o $@ $(CPP_LNK_FLAGS)
+	@ echo "$(PREFIX_LINK) Linking done for: $@"
 
 
 
@@ -165,14 +210,14 @@ $(BIN_DIR):
 	@ echo "$(PREFIX_WARN) No bin dir found. Creating one."
 	@ mkdir -p $(BIN_DIR)
 
-#	Linking rule
-$(NAME): $(BIN_DIR) $(OBJS)
-	 $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(OBJS) -o $(NAME) $(CPP_LNK_FLAGS)
-	@ echo "$(PREFIX_LINK) Linking done for: $(NAME)"
+# Compilation rule client
+$(BIN_DIR)/$(SRC_DIR_CLIENT)/%.o : $(SRC_DIR_CLIENT)/%.cpp $(HEADER_FILES)
+	@ mkdir -p $(BIN_DIR)/$(shell dirname $<)
+	@ $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(CPP_INC_FLAGS) -c $< -o $@  
+	@ echo "$(PREFIX_COMP) Compiled: $(shell basename $<)"
 
-
-# Compilation rule 
-$(BIN_DIR)/$(SRC_DIR)/%.o : $(SRC_DIR)/%.cpp $(HEADER_FILES)
+# Compilation rule server
+$(BIN_DIR)/$(SRC_DIR_SERVER)/%.o : $(SRC_DIR_SERVER)/%.cpp $(HEADER_FILES)
 	@ mkdir -p $(BIN_DIR)/$(shell dirname $<)
 	@ $(COMP) $(CPP_CMP_FLAGS) $(CPP_DBG_FLAGS) $(CPP_INC_FLAGS) -c $< -o $@  
 	@ echo "$(PREFIX_COMP) Compiled: $(shell basename $<)"
@@ -184,8 +229,10 @@ clean:
 
 # final clean rule
 fclean: clean 
-	@ echo "$(PREFIX_CLEAN) Cleaning $(NAME)"
-	@ rm -f $(NAME)
+	@ echo "$(PREFIX_CLEAN) Cleaning $(NAME_CLIENT)"
+	@ rm -f $(NAME_CLIENT)
+	@ echo "$(PREFIX_CLEAN) Cleaning $(NAME_SERVER)"
+	@ rm -f $(NAME_SERVER)
 
 fcleanlib: fclean uninstall_yaml_library uninstall_argparse
 	@ echo "$(PREFIX_CLEAN) Cleaning $(LIB_DIR)/"

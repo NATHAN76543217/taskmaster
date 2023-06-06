@@ -76,17 +76,6 @@
 //TODO Change LOG_CATEGORY_AUTO with a variable
 # define LOG_CATEGORY_AUTO		false
 
-//REVIEW double set of defines for optimization 
-// LOG_DEBUG   ?
-// et
-// LOG_DEBUG_O ?
-
-// # define LOG_DEBUG(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(log_message));
-// # define LOG_INFO(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_INFO, category, std::string(log_message));
-// # define LOG_WARN(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_WARNING, category, std::string(log_message));
-// # define LOG_ERROR(category, log_message)		Tintin_reporter::getLogManager().log(LOG_LEVEL_ERROR, category, std::string(log_message));
-// # define LOG_CRITICAL(category, log_message)	Tintin_reporter::getLogManager().log(LOG_LEVEL_CRITICAL, category, std::string(log_message));
-
 # define LOG_DEBUG(category, log_message) \
 	{ std::ostringstream _s; _s << log_message; Tintin_reporter::getLogManager().log(LOG_LEVEL_DEBUG, category, std::string(_s.str())); }
 # define LOG_INFO(category, log_message) \

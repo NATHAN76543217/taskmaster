@@ -3,9 +3,11 @@ test.yml
 lib/
 bin/
 taskmaster
+taskmasterctl
 taskmaster.code-workspace
 .vscode
 *.log
+*.lock
 # Prerequisites
 *.d
 

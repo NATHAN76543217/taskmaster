@@ -81,8 +81,6 @@ class Taskmaster
 		void		freeLockFile( void ) const;
 		bool		isRunningRootPermissions( void ) const;
 
-		int			parse_arguments( void );
-		
 		int			loadConfigFile(const std::string & path);
 
 		int			reloadConfigFile( void );

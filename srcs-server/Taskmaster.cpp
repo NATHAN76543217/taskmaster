@@ -43,12 +43,6 @@ void		Taskmaster::initCategories( void ) const
 	Methods implementation
 */
 
-int			Taskmaster::parse_arguments( void )
-{
-	return EXIT_SUCCESS;
-}
-
-
 
 int			Taskmaster::exitProperly( void )
 {
@@ -369,14 +363,15 @@ void		Taskmaster::takeLockFile( void ) const
 	if ((fd = open(this->_lockpath.c_str(), O_CREAT|O_EXCL )) == -1) {
 		if (errno == EEXIST)
 		{
-			LOG_CRITICAL(LOG_CATEGORY_INIT, "The lock file already exist. Impossible to start a second instance of this program")
+			std::cerr << "The lock file already exist. Impossible to start a second instance of this program" << std::endl;
 		}
 		else
 			perror("open");
 		//TODO exit properly
+		// return EXI_t
 		exit(1);
 	}
-	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly taken.");
+	std::cerr << "Lock file '" << this->_lockpath << "' successfuly taken." << std::endl;
 	close(fd);
 }
 
