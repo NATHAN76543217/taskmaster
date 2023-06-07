@@ -21,7 +21,6 @@
 class Taskmaster
 {
 	private:
-		pid_t		_pid;
 		Config		_config;
 
 		/* Config values */
@@ -32,7 +31,7 @@ class Taskmaster
 
 	protected:
 		/* Constructor */
-		Taskmaster() : _pid(::getpid()), _lockpath(TM_DEF_LOCKPATH), _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS), _logcolor(TM_DEF_LOGCOLOR) 
+		Taskmaster() : _lockpath(TM_DEF_LOCKPATH), _logpath(TM_DEF_LOGPATH), _max_connections(TM_DEF_MAX_CONNECTIONS), _logcolor(TM_DEF_LOGCOLOR) 
 		{
 			(void) _max_connections;
 		}
@@ -75,7 +74,7 @@ class Taskmaster
 		 * executed on its instance.
 		 */
 
-		void		initCategories( void ) const;
+		int			initCategories( void ) const;
 		pid_t		getpid( void ) const;
 		void		takeLockFile( void ) const;
 		void		freeLockFile( void ) const;

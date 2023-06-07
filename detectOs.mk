@@ -16,7 +16,8 @@ else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
         OS_DETECTED			=	LINUX
-		CPP_CMP_FLAGS		+=	-D$(OS_DETECTED) -std=gnu11  
+#REVIEW tmp CPP_CMP_FLAGS		+=	-D$(OS_DETECTED) -std=c++11  
+		CPP_CMP_FLAGS		+=	-D$(OS_DETECTED) -std=c++17 
 	    ifeq ($(LANG),C)
 			COMP		=	gcc
 		else ifeq ($(LANG),C++)

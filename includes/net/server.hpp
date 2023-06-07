@@ -15,6 +15,10 @@
 
 #include "Tintin_reporter.hpp"
 
+# ifdef __linux__
+#define FD_COPY(src_set, dst_set) std::memcpy((*dst_set).fds_bits, (*src_set).fds_bits, sizeof((*dst_set).fds_bits))
+#endif //__linux__
+
 // predefinition for ServerClient
 template<typename H>
 class Server;
@@ -145,19 +149,15 @@ class Server
         Server(const std::string& ip_address, const int port, const std::string& ip_address6 = "")
         : ip_address(ip_address), ip_address6(ip_address6), port(port), running(false), enable_IPv6(!ip_address6.empty()), _client_handler(*this), _socket(-1), _socket6(-1)
         {
-            this->_address = (sockaddr_in){
-                .sin_family = AF_INET,
-                .sin_port = htons(static_cast<in_port_t>(this->port)),
-            };
+			this->_address.sin_family = AF_INET;
+			this->_address.sin_port = htons(static_cast<in_port_t>(this->port));
             if (inet_aton(this->ip_address.c_str(), &this->_address.sin_addr) == -1)
                 throw InetException();
 
             if (this->enable_IPv6)
             {
-                this->_address6 = (sockaddr_in6){
-                    .sin6_family = AF_INET6,
-                    .sin6_port = htons(static_cast<in_port_t>(this->port + 1)),
-                };
+                this->_address6.sin6_family = AF_INET6;
+                this->_address6.sin6_port = htons(static_cast<in_port_t>(this->port + 1));
                 if (inet_pton(AF_INET6, this->ip_address6.c_str(), &this->_address6) == -1)
                     throw InetException();
             }

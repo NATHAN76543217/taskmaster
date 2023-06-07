@@ -21,6 +21,7 @@
 // TODO Use <chrono> in all our time stuff (specialy timestamp)
 //TODO for logger add mutex for every log_destination (with required checks) but only for files (std::cout/cerr is thread safe)
 //TODO implement a flood protection from a valid connection
+//TODO Implement config reload without crashinfg server x)
 
 class ClientData
 {
@@ -142,7 +143,11 @@ int main(int ac, char** av)
 
 
 #if LOG_CATEGORY_AUTO == false
-	TM->initCategories();
+	if (TM->initCategories() == EXIT_FAILURE)
+	{
+		TM->freeLockFile();
+		return EXIT_FAILURE;
+	}
 	// std::cout << Tintin_reporter::getLogManager() << std::endl;
 	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::getLogManager())
 
@@ -151,7 +156,6 @@ int main(int ac, char** av)
 #endif
 
 
-	LOG_INFO(LOG_CATEGORY_INIT, "PID: " + ntos(TM->getpid()))
 
 	if (init_signals(&sa) != EXIT_SUCCESS)
 	{
@@ -194,6 +198,7 @@ int main(int ac, char** av)
 	else if (pid == 0)
 	{
 		LOG_INFO(LOG_CATEGORY_INIT, "Started daemon");
+		LOG_DEBUG(LOG_CATEGORY_INIT, "PID: " + ntos(TM->getpid()))
 		
 		Server<TaskmasterClientsHandler>	*server = new Server<TaskmasterClientsHandler>(serverIp, serverPort);
 		server->start_listening();

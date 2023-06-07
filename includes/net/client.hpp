@@ -12,6 +12,9 @@
 #include "dto_base.hpp"
 #include "Tintin_reporter.hpp"
 
+# ifdef __linux__
+#define FD_COPY(src_set, dst_set) std::memcpy((*dst_set).fds_bits, (*src_set).fds_bits, sizeof((*dst_set).fds_bits))
+#endif //__linux__
 template<typename D>
 class Client;
 

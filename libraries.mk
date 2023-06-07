@@ -24,7 +24,7 @@ CPP_INC_FLAGS		+=	-I $(ARGPARSE_LIB)
 
 #lib yaml
 FTXUI_LIB_PATH 		= $(LIB_DIR)/ftxui
-FTXUI_LIB			= $(FTXUI_LIB_PATH)/build/libyaml-cpp.a
-FTXUI_LIB_VERSION	=	0.7.0
+FTXUI_LIB			= $(FTXUI_LIB_PATH)/build/libftxui-component.a $(FTXUI_LIB_PATH)/build/libftxui-screen.a $(FTXUI_LIB_PATH)/build/libftxui-dom.a
+# FTXUI_LIB_VERSION	=	0.7.0
 CPP_INC_FLAGS		+=	-I $(FTXUI_LIB_PATH)/include
-CPP_LNK_FLAGS		+=	-L $(FTXUI_LIB_PATH)/build -lyaml-cpp 
+CPP_LNK_FLAGS		+=	-L $(FTXUI_LIB_PATH)/build -lftxui-component -lftxui-dom -lftxui-screen 

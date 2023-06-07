@@ -26,9 +26,16 @@ bool		Taskmaster::isRunningRootPermissions( void ) const
 // 	exit(0);
 // }
 
-void		Taskmaster::initCategories( void ) const
+//TODO check return value for each category
+int		Taskmaster::initCategories( void ) const
 {
-	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
+	try {
+		Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
+	} catch(Tintin_reporter::defaultFileException & e)
+	{
+		std::cerr << "Failed to open default file 'default.log'." << std::endl;
+		return EXIT_FAILURE;
+	}
 	// Tintin_reporter::getLogManager(LOG_STDOUT_MAGIC).addCategory(LOG_CATEGORY_DEFAULT);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_LOGGER, LOG_STDOUT_MAGIC);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
@@ -36,6 +43,7 @@ void		Taskmaster::initCategories( void ) const
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JOB, LOG_STDOUT_MAGIC);
+	return EXIT_SUCCESS;
 }
 
 
@@ -403,5 +411,5 @@ Taskmaster *Taskmaster::GetInstance()
 
 pid_t			Taskmaster::getpid( void ) const
 {
-	return this->_pid;
+	return ::getpid();
 }
