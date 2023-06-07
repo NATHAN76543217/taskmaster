@@ -92,9 +92,9 @@ class Server
           running(false),
           n_clients_connected(0),
           max_connections(-1),
-          _client_handler(*this),
+          _client_handler(*this)
 #ifdef ENABLE_TLS
-          _ssl_method(TLS_server_method())
+          ,_ssl_method(TLS_server_method())
 #endif
         {            
 
@@ -366,6 +366,7 @@ class Server
             if (client._is_ssl && client._ssl_connection != nullptr)
             {
                 SSL_free(client._ssl_connection);
+                client._ssl_connection = nullptr;
             }
 #endif
 
@@ -573,9 +574,8 @@ class Server
                     LOG_INFO(LOG_CATEGORY_NETWORK, "SSL accept incomplete, waiting for more data for handshake...");
                     return (0);
                 }
-                LOG_WARN(LOG_CATEGORY_NETWORK, "SSL accept failed for client trying to connect on client from " << client.getHostname());
+                LOG_WARN(LOG_CATEGORY_NETWORK, "SSL accept handshake failed client trying to connect from " << client.getHostname());
                 ERR_print_errors_fp(stderr);
-                this->disconnect(client);
                 return (-1);
             }
             client._accept_done = true;
@@ -645,9 +645,11 @@ class Server
             {
                 if (!from._accept_done)
                 {
-                    int err = this->_ssl_do_accept(from);
-                    if (err == -1)
+                    if (this->_ssl_do_accept(from) == -1)
+                    {
+                        this->disconnect(from);
                         return false;
+                    }
                     return (true);
                 }
                 size = SSL_read(from._ssl_connection, buffer, RECV_BLK_SIZE);

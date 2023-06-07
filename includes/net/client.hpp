@@ -259,6 +259,7 @@ class Client : public H::client_data_type, public PacketManager
             this->_socket = -1;
             this->connected = false;
             this->_handler.onDisconnected();
+            LOG_WARN(LOG_CATEGORY_NETWORK, "Disconnected from server.");
         }
 
 
@@ -441,7 +442,8 @@ class Client : public H::client_data_type, public PacketManager
 #ifdef ENABLE_TLS
             if (this->_useTLS && this->_handshake_done == false)
             {
-                this->_do_ssl_handshake();
+                if (this->_do_ssl_handshake() == -1)
+                    this->disconnect();
                 return (false);
             }
 #endif

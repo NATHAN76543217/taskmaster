@@ -13,8 +13,13 @@ class ServerEndpoint : public NetObject
     public:
 
 #ifdef ENABLE_TLS
-        ServerEndpoint(const std::string& ip_address, const int port, const bool useTLS = false, const sa_family_t family = AF_INET)
+        ServerEndpoint(const std::string& ip_address, const int port, const bool useTLS = false, const sa_family_t family = AF_INET) throw(std::logic_error)
         : NetObject(ip_address, port, family), _useTLS(useTLS)
+
+#else
+        ServerEndpoint(const std::string& ip_address, const int port, const sa_family_t family = AF_INET) throw(std::logic_error)
+        : NetObject(ip_address, port, family)
+#endif
         {
             this->_socket = ::socket(this->_address_family, SOCK_STREAM, 0);
             if (this->_socket <= 0)
@@ -23,7 +28,6 @@ class ServerEndpoint : public NetObject
                 throw SocketException();
             }
         }
-#endif
 
 
         int     getSocket() const { return (this->_socket); }
@@ -32,13 +36,13 @@ class ServerEndpoint : public NetObject
 #endif
 
 
-        void    start_listening(const int max_pending_connections) const
+        void    start_listening(const int max_pending_connections) const throw(std::logic_error)
         {
             if (this->_address_family == AF_INET)
             {
                 if (bind(this->_socket, (sockaddr*)(&this->_address_4), sizeof(this->_address_4)) != 0)
                 {
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address initialization on port " << ntohs(this->_port) << ": " << strerror(errno));
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address initialization on port " << this->_port << ": " << strerror(errno));
                     throw BindException();
                 }
             }
@@ -46,14 +50,14 @@ class ServerEndpoint : public NetObject
             {
                 if (bind(this->_socket, (sockaddr*)(&this->_address_6), sizeof(this->_address_6)) != 0)
                 {
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address on IPv6 initialization on port " << ntohs(this->_port) << ": " << strerror(errno));
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address on IPv6 initialization on port " << this->_port << ": " << strerror(errno));
                     throw BindException();
                 }
             }
 
             if (listen(this->_socket, max_pending_connections) != 0)
             {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Listen syscall failed for address initialization on port " << ntohs(this->_port) << ": " << strerror(errno));
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Listen syscall failed for address initialization on port " << this->_port << ": " << strerror(errno));
                 throw ListenException();
             }
 #ifdef ENABLE_TLS
@@ -64,31 +68,22 @@ class ServerEndpoint : public NetObject
                 LOG_INFO(LOG_CATEGORY_NETWORK, "Started listening on endpoint " << this->_ip_address << " on port " << this->_port)
         }
 
-        class SocketException : std::exception
+        class SocketException : public std::logic_error
         {
             public:
-                const char *what() const noexcept
-                {
-                    return ("socket exception occured: abort");
-                }
+                SocketException() : std::logic_error("socket exception occured: abort") {}
         };
 
-        class BindException : std::exception
+        class BindException : public std::logic_error
         {
             public:
-                const char *what() const noexcept
-                {
-                    return ("bind exception occured: abort");
-                }
+                BindException() : std::logic_error("bind exception occured: abort") {}
         };
 
-        class ListenException : std::exception
+        class ListenException : public std::logic_error
         {
             public:
-                const char *what() const noexcept
-                {
-                    return ("listen exception occured: abort");
-                }
+                ListenException() : std::logic_error("listen exception occured: abort") {}
         };
 
     private:

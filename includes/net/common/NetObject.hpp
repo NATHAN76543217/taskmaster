@@ -8,8 +8,8 @@
 class NetObject
 {
     public:
-        // constructs from IPv4 addr
-        NetObject(const struct sockaddr_in& addr)
+        // constructs from IPv4 addr (i.e. on connection accepted)
+        NetObject(const struct sockaddr_in& addr) throw(std::logic_error)
         : _address_4(addr),
           _address_family(AF_INET)
         {
@@ -22,8 +22,8 @@ class NetObject
             std::memset(&this->_address_6, 0, sizeof(this->_address_6));
         }
 
-        // constructs from IPv6 addr
-        NetObject(const struct sockaddr_in6& addr)
+        // constructs from IPv6 addr (i.e. on connection accepted)
+        NetObject(const struct sockaddr_in6& addr) throw(std::logic_error)
         : _address_6(addr),
           _address_family(AF_INET6)
         {
@@ -36,8 +36,8 @@ class NetObject
             std::memset(&this->_address_4, 0, sizeof(this->_address_4));
         }
 
-        // Constructs a new sockaddr depending on family
-        NetObject(const std::string& ip_address, const int port, const sa_family_t family)
+        // Constructs a new sockaddr depending on family (i.e. for initialisation of struct sockaddr)
+        NetObject(const std::string& ip_address, const int port, const sa_family_t family) throw(std::logic_error)
         : _ip_address(ip_address),
           _port(static_cast<in_port_t>(port)),
           _address_family(family)

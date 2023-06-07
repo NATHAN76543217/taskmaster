@@ -33,7 +33,7 @@ struct packed_data
 
 // data packer, packs data of T into a packed_data<sizeof(T)> struct with a message name 
 template<typename T, std::size_t S = sizeof(T)>
-packed_data<S> pack_data(const std::string& message_name, const T& data)
+packed_data<S> pack_data(const std::string& message_name, const T& data) throw(InvalidPacketException)
 {
     packed_data<S>  pack;
 
