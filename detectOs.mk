@@ -28,7 +28,7 @@ else
 		ifeq ($(LANG),C)
 			COMP		=	clang
 		else ifeq ($(LANG),C++)
-			COMP		=	clang++
+			COMP		=	g++
 		endif
 	else
 		OS_DETECTED	=	UNKNOWN

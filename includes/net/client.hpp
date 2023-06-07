@@ -5,6 +5,8 @@
 #include <openssl/err.h>
 #endif
 
+#include <cstring>
+#include <cstdlib>
 #include <string>
 #include <stack>
 #include <map>
@@ -13,41 +15,17 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <sys/socket.h>
-#include "packet.hpp"
-#include "dto_base.hpp"
+
 #include "Tintin_reporter.hpp"
 
-template<typename D>
-class Client;
+// system select implementation may not implement FD_COPY
+#ifndef FD_COPY
+#define FD_COPY(src, dst) std::memcpy(dst, src, sizeof(*(src)))
+#endif
 
-
-template<typename H, typename D>
-class ClientHandler
-{
-    public:
-        typedef D                          client_data_type;
-        typedef Client<H>                  client_type;
-        typedef ClientHandler<H, D>        handler_type;
-    
-    public:
-        ClientHandler(client_type& client)
-            : client(client)
-            {}
-
-        virtual void    onConnected() { };
-        //virtual void    onConnectedIPv6() { };
-        virtual void    onDisconnected() { };
-
-        // called when the server tried to send data on message_name but data type mismatched.
-        virtual void    onMessageMismatch(const std::string& message_name) { (void)message_name; };
-
-
-        virtual void    declareMessages() = 0;
-
-    protected:
-        client_type& client;
-};
-
+#include "common/packet.hpp"
+#include "common/dto_base.hpp"
+#include "client/ClientHandler.hpp"
 
 class DefaultClientData
 {
@@ -83,7 +61,7 @@ class DefaultClientHandler : ClientHandler<DefaultClientHandler, DefaultClientDa
 
 
 template<typename H>
-class Client : public H::client_data_type, protected PacketManager
+class Client : public H::client_data_type, public PacketManager
 {
     public:
         typedef Client                          client_type;
@@ -93,23 +71,16 @@ class Client : public H::client_data_type, protected PacketManager
     public:
         Client(const std::string& server_ip, const short server_port)
         : data_type(),
+          PacketManager(server_ip, server_port, AF_INET),
           connected(false),
-          server_ip(server_ip),
-          server_port(server_port),
+          _socket(-1),
 #ifdef ENABLE_TLS
-          useTLS(false), _socket(-1),
+          _useTLS(false),
           _ssl_method(TLS_client_method()),
           _handshake_done(false),
 #endif
           _handler(*this)
-        {
-
-            // _client_address.sin_family = AF_INET;
-            // _client_address.sin_port = htons(static_cast<in_port_t>(this->server_port));
-            // if (inet_aton(server_ip.c_str(), &_client_address.sin_addr) == 0)
-            //     throw InetException();
-            this->_init_addr4(this->_client_address, server_ip, server_port);
-            
+        {            
             this->_handler.declareMessages();
 
             FD_ZERO(&this->_read_fd);
@@ -126,7 +97,7 @@ class Client : public H::client_data_type, protected PacketManager
         /* upgrades to a TLS connection, needs to be called before connect */
         void    enableTLS()
         {
-            this->useTLS = true;
+            this->_useTLS = true;
             this->_init_ssl_ctx();
         }
 #endif
@@ -138,13 +109,15 @@ class Client : public H::client_data_type, protected PacketManager
             if (this->_socket <= 0)
                 throw SocketException();
 
-            if (::connect(this->_socket, reinterpret_cast<sockaddr*>(&this->_client_address), sizeof(this->_client_address)) != 0)
+            if (::connect(this->_socket, reinterpret_cast<sockaddr*>(&this->_address_4), sizeof(this->_address_4)) != 0)
+            {
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Can't connect to server: " << std::strerror(errno));
                 throw ConnectException();
-
+            }
             FD_SET(this->_socket, &this->_read_fd);
 
 #ifdef ENABLE_TLS
-            if (this->useTLS)
+            if (this->_useTLS)
             {
                 // set socket for writing to send ssl handshake
                 FD_SET(this->_socket, &this->_send_fd);
@@ -154,10 +127,15 @@ class Client : public H::client_data_type, protected PacketManager
                 SSL_set_fd(this->_ssl_connection, this->_socket);
                 SSL_set_connect_state(this->_ssl_connection);
             }
+            else
+            {
+                this->_handler.onConnected();
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on address " << this->_ip_address << " on port " << this->_port);
+            }
 #else // connection is set later for ssl handshake to take place
             
             this->_handler.onConnected();
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on address " << this->server_ip << " on port " << this->server_port);
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on address " << this->_ip_address << " on port " << this->_port);
 #endif 
         }
 
@@ -264,7 +242,7 @@ class Client : public H::client_data_type, protected PacketManager
             LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted now to the server");
             try {
                 return this->_send_data();
-            } catch (SendException)
+            } catch (SendException& e)
             {
                 return (false);
             }
@@ -283,21 +261,19 @@ class Client : public H::client_data_type, protected PacketManager
             this->_handler.onDisconnected();
         }
 
-    
-    private:
-        void    _init_addr4(sockaddr_in& addr, const std::string& ip_addr, const int port)
+
+        bool    useTLS() const
         {
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(static_cast<in_port_t>(port));
-            if (inet_aton(ip_addr.c_str(), &addr.sin_addr) == 0)
-                throw InetException();
+            return (this->_useTLS);
         }
 
+    
+    private:
 
         /* ================================================ */
         /* SSL context init                                 */
         /* ================================================ */
-#ifdef ENABLE_SSL
+#ifdef ENABLE_TLS
         void    _init_ssl_ctx()
         {
             OpenSSL_add_all_algorithms();                       /* load & register all cryptos, etc. */
@@ -323,7 +299,7 @@ class Client : public H::client_data_type, protected PacketManager
                 if (ssl_error == SSL_ERROR_WANT_WRITE)
                 {
                     // needs to send more data
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Handshake partially sent, need to send more data...");
+                    LOG_INFO(LOG_CATEGORY_NETWORK, "Handshake partially sent, need to send more data...");
                     return (0);
                 }
                 ERR_print_errors_fp(stderr);
@@ -333,7 +309,7 @@ class Client : public H::client_data_type, protected PacketManager
             FD_CLR(this->_socket, &this->_send_fd);
             this->_handshake_done = true;
             this->_handler.onConnected();
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on TLS on address " << this->server_ip << " on port " << this->server_port);
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on TLS on address " << this->_ip_address << " on port " << this->_port);
             return (1);
         }
 #endif
@@ -345,7 +321,7 @@ class Client : public H::client_data_type, protected PacketManager
             uint8_t buffer[RECV_BLK_SIZE] = {0};
             ssize_t size;
 #ifdef ENABLE_TLS
-            if (this->useTLS)
+            if (this->_useTLS)
                 size = SSL_read(this->_ssl_connection, buffer, RECV_BLK_SIZE);
             else
 #endif
@@ -462,8 +438,8 @@ class Client : public H::client_data_type, protected PacketManager
 
         bool    _send_data()
         {
-#ifdef ENABLE_SSL
-            if (this->useTLS && this->_handshake_done == false)
+#ifdef ENABLE_TLS
+            if (this->_useTLS && this->_handshake_done == false)
             {
                 this->_do_ssl_handshake();
                 return (false);
@@ -473,13 +449,14 @@ class Client : public H::client_data_type, protected PacketManager
             if (this->_data_to_send.empty())
             {
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending however no data is provider to send.");
+                FD_CLR(this->_socket, &this->_send_fd);
                 return (false);
             }
 
             LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to server");
             ssize_t sent_bytes;
 #ifdef ENABLE_TLS
-            if (this->useTLS)
+            if (this->_useTLS)
                 sent_bytes = SSL_write(this->_ssl_connection, this->_data_to_send.top().c_str(), this->_data_to_send.top().size());
             else
 #endif
@@ -579,14 +556,9 @@ class Client : public H::client_data_type, protected PacketManager
 
     public:
         bool        connected;
-        std::string server_ip;
-        short       server_port;
-#ifdef ENABLE_TLS
-        bool        useTLS;
-#endif
 
     private:
-        int     _socket;
+        int         _socket;
 
         fd_set      _read_fd;
         fd_set      _send_fd;
@@ -596,6 +568,7 @@ class Client : public H::client_data_type, protected PacketManager
         msg_list_type   _messages_handlers;
 
 #ifdef ENABLE_TLS
+        bool                _useTLS;
         SSL_CTX*            _ssl_ctx;
         const SSL_METHOD*   _ssl_method;
         SSL*                _ssl_connection;

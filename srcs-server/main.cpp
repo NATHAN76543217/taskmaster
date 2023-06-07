@@ -26,18 +26,18 @@ class ClientData
 		bool	asked_status = false;
 };
 
-class TaskmasterClientsManager : public ServerClientHandler<TaskmasterClientsManager, ClientData>
+class TaskmasterClientsManager : public ServerClientsHandler<TaskmasterClientsManager, ClientData>
 {
     public:
         TaskmasterClientsManager(server_type& server)
         : handler_type(server)
         {}
 
-		// void onConnected(client_type& client)
-		// {
-		// 	if (client.isSSL())
-		// 		std::cout << client.getCertificate() << std::endl;
-		// }
+		void onConnected(client_type& client)
+		{
+			if (client.isSSL())
+				std::cout << client.getCertificate() << std::endl;
+		}
 
         void declareMessages()
         {
@@ -179,8 +179,12 @@ int main(int ac, char** av)
 	// else if (pid == 0)
 	// {
 		LOG_INFO(LOG_CATEGORY_INIT, "Started daemon");
-	
-		Server<TaskmasterClientsManager>	*server = new Server<TaskmasterClientsManager>(serverIp, serverPort);
+
+		std::list<ServerEndpoint> endpoints;
+		endpoints.emplace_back(ServerEndpoint("127.0.0.1", 8080, false, AF_INET));
+		endpoints.emplace_back(ServerEndpoint("127.0.0.1", 4040, true, AF_INET));
+		endpoints.emplace_back(ServerEndpoint("::1", 6060, false, AF_INET6));
+		Server<TaskmasterClientsManager>	*server = new Server<TaskmasterClientsManager>(endpoints);
 		server->ssl_cert_file = 		"./certificates/cert.pem";
 		server->ssl_private_key_file =	"./certificates/cert.pem";
 		

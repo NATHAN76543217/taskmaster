@@ -1,6 +1,6 @@
 #pragma once
 
-#include "net/dto_base.hpp"
+#include "net/common/dto_base.hpp"
 
 /*
     DTO structs MUST inherit from DTO base object

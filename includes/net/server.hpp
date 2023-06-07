@@ -6,203 +6,31 @@
 #include <openssl/err.h>
 #endif
 
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <iostream>
 #include <map>
 #include <stack>
+#include <list>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
-#include "packet.hpp"
-#include "dto_base.hpp"
+
+// system select implementation may not implement FD_COPY
+#ifndef FD_COPY
+#define FD_COPY(src, dst) std::memcpy(dst, src, sizeof(*(src)))
+#endif
 
 #include "Tintin_reporter.hpp"
 
-// predefinition for ServerClient
-template<typename H>
-class Server;
-
-
-
-/*  ServerClient class 
-*
-*   TODO DESCRIPTION
-*   ...
-*
-*
-*
-*
-*
-*/
-template<typename H, typename D>
-class ServerClient : public D, protected PacketManager
-{
-#ifdef ENABLE_TLS
-    private:
-        ServerClient(int socket, SSL* ssl = nullptr)
-            : D(), _socket(socket), _ssl(ssl), _is_ssl(ssl != nullptr), _accept_done(false)
-            {}
-    
-    public:
-        // ipv4 SSL client
-        ServerClient(int socket, const sockaddr_in& address, SSL* ssl = nullptr)
-            : ServerClient(socket, ssl)
-            {
-                this->_address = std::string(inet_ntoa(address.sin_addr));
-                this->_port = ntohs(address.sin_port);
-            }
-
-        // ipv6 SSL client
-        ServerClient(int socket, const sockaddr_in6& address, const socklen_t address_len, SSL* ssl = nullptr)
-            : ServerClient(socket, ssl)
-            {
-                char addr_buffer[address_len];
-                if (inet_ntop(AF_INET6, &address.sin6_addr, addr_buffer, address_len) == NULL)
-                {
-                    LOG_ERROR(LOG_CATEGORY_NETOWRK, "Invalid address for initializing a new client");
-                    // TODO
-                }
-                
-                this->_address = std::string(addr_buffer);
-                this->_port = ntohs(address.sin6_port);
-            }
-#else
-    private:
-        ServerClient(int socket)
-            : D(), _socket(socket)
-            {}
-    
-    public:
-        // ipv4 client
-        ServerClient(int socket, const sockaddr_in& address)
-            : ServerClient(socket)
-            {
-                this->_address = std::string(inet_ntoa(address.sin_addr));
-                this->_port = ntohs(address.sin_port);
-            }
-        
-        // ipv6 client
-        ServerClient(int socket, const sockaddr_in6& address, const socklen_t address_len)
-            : ServerClient(socket)
-            {
-                char addr_buffer[address_len];
-                if (inet_ntop(AF_INET6, &address.sin6_addr, addr_buffer, address_len) == NULL)
-                {
-                    LOG_ERROR(LOG_CATEGORY_NETOWRK, "Invalid address for initializing a new client");
-                    // TODO
-                }
-                
-                this->_address = std::string(addr_buffer);
-                this->_port = ntohs(address.sin6_port);
-            }
-#endif
-
-#ifdef ENABLE_TLS
-        SSL    *getSSL() const { return this->_ssl; }
-        bool    isSSL() const { return this->_is_ssl; }
-
-        // todo 
-        std::string getCertificate()
-        {
-            if (!this->_is_ssl)
-                return "";
-
-            X509 *cert;
-            cert = SSL_get_peer_certificate(this->_ssl);
-            if ( cert == NULL )
-                return "No certificate";
-            
-            // char *line;
-            // printf("Server certificates:\n");
-            // line = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
-            // printf("Subject: %s\n", line);
-            // free(line);
-            // line = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-            // printf("Issuer: %s\n", line);
-            // free(line);
-            // X509_free(cert);
-            char *line;
-            line = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-            std::string certificate = std::string(line, std::strlen(line));
-            free(line);
-            X509_free(cert);
-            return (certificate);
-        }
-
-#endif
-
-        int     getSocket() const { return this->_socket; }
-
-        std::string getFullAddress() const
-        {
-            return (this->_address + ":" + std::to_string(this->_port));
-        }
-
-        std::string getAddress() const
-        {
-            return (this->_address);
-        }
-
-        int         getPort() const
-        {
-            return (this->_port);
-        }
-
-    private:
-        int         _socket;
-        std::string _address;
-        int         _port;
-
-#ifdef ENABLE_TLS
-        SSL    *_ssl;
-        bool    _is_ssl;
-        bool    _accept_done;
-#endif
-
-    friend class Server<H>;
-};
-
-
-
-/*      ServerClientHandler class 
-*
-*   TODO DESCRIPTION
-*   ...
-*
-*
-*
-*
-*
-*/
-template<typename T, typename D>
-class ServerClientHandler
-{
-    public:
-        typedef D                                   client_data_type;
-        typedef ServerClient<T, client_data_type>   client_type;
-        typedef Server<T>                           server_type;
-        typedef ServerClientHandler<T, D>           handler_type;
-    
-    public:
-        ServerClientHandler(server_type& server)
-            : server(server)
-            {}
-
-        virtual void    onConnected(client_type& client) { (void)client; };
-        virtual void    onDisconnected(client_type& client) { (void)client; };
-
-        // called when an user tried to send data on message but data type mismatched.
-        virtual void    onMessageMismatch(client_type& client, const std::string& message_name) { (void)client; (void)message_name; };
-
-
-        virtual void    declareMessages() = 0;
-    
-    protected:
-        server_type&        server;
-};
-
+#include "common/packet.hpp"
+#include "common/dto_base.hpp"
+#include "server/ServerClient.hpp"
+#include "server/ServerClientsHandler.hpp"
+#include "server/ServerEndpoint.hpp"
 
 class DefaultClientData
 {
@@ -212,7 +40,7 @@ class DefaultClientData
 };
 
 /* Example client handler */
-class DefaultClientHandler : ServerClientHandler<DefaultClientHandler, DefaultClientData>
+class DefaultClientHandler : ServerClientsHandler<DefaultClientHandler, DefaultClientData>
 {
     // struct ExampleDto : DTO
     // {
@@ -258,43 +86,38 @@ class Server
         /* Constructors                                     */
         /* ================================================ */
 
-        Server(const std::string& ip_address, const int port, const std::string& ip_address6 = "")
-        : ip_address(ip_address),
-          ip_address6(ip_address6),
-          port(port),
-#ifdef ENABLE_TLS
-          ssl_port(443),
-#endif
+
+        Server(const std::list<ServerEndpoint>& endpoints)
+        : endpoints(endpoints),
           running(false),
           n_clients_connected(0),
           max_connections(-1),
-          enable_IPv6(!ip_address6.empty()),
           _client_handler(*this),
-          _socket(-1),
-          _socket6(-1)
 #ifdef ENABLE_TLS
-          ,_ssl_socket(-1),
-          _ssl_only(false),
           _ssl_method(TLS_server_method())
 #endif
         {            
-            this->_init_addr4();
-
-            if (this->enable_IPv6)
-            {
-                this->_init_addr6();
-            }
 
 #ifdef ENABLE_TLS
             SSL_library_init();
 
             this->_init_ssl_ctx();
-            this->_init_ssl_addr();
 #endif
+            this->_client_handler.declareMessages();
 
             FD_ZERO(&this->_read_fds);
             FD_ZERO(&this->_write_fds);
         }
+
+
+#ifdef ENABLE_TLS
+        Server(const std::string& ip_address, const int port, const bool useTLS = false, const sa_family_t family = AF_INET)
+        : Server(std::list<ServerEndpoint>(1, ServerEndpoint(ip_address, port, useTLS, family)))
+#else
+        Server(const std::string& ip_address, const int port, const sa_family_t family = AF_INET)
+        : Server(std::list<ServerEndpoint>(1, ServerEndpoint(ip_address, port, family)))
+#endif
+        {}
 
         Server(const Server& copy) = delete;
 
@@ -303,16 +126,15 @@ class Server
 
         ~Server()
         {
-            for (client_type& client : this->_clients)
-                this->disconnect(client);
+            for (typename client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
+                ::close(it->second.getSocket());
 
+            for (const ServerEndpoint& ep : this->endpoints)
+                ::close(ep.getSocket());
+            
 #ifdef ENABLE_TLS
             SSL_CTX_free(this->_ssl_ctx);
-            close(this->_ssl_socket);
 #endif
-            close(this->_socket);
-            if (enable_IPv6)
-                close(this->_socket6);
         }
 
 
@@ -325,25 +147,27 @@ class Server
         void    start_listening(int max_pending_connections = 10)
         {
 #ifdef ENABLE_TLS
-            this->_load_ssl_certs();
+            bool enablesTLS = false;
 #endif
-            this->_init_socket4(max_pending_connections);
-
-            if (enable_IPv6)
+            for (const ServerEndpoint& ep : this->endpoints)
             {
-                this->_init_socket6(max_pending_connections);
+#ifdef ENABLE_TLS
+                if (ep.useTLS())
+                    enablesTLS = true;
+#endif
+                ep.start_listening(max_pending_connections);
+                // set endpoint to be selected 
+                FD_SET(ep.getSocket(), &this->_read_fds);
             }
 
 #ifdef ENABLE_TLS
-            _init_ssl_socket(max_pending_connections);
+            if (enablesTLS)
+                this->_load_ssl_certs();
 #endif
-
-            this->_client_handler.declareMessages();
             this->running = true;
         }
 
-        /* Waits for an update on the read fds, needs to be called every time        
-        */
+        /* Waits for an update on the read fds, needs to be called every time        */
         /* It will gather informations received on sockets and run clients handlers  */
         /* This function should be called after doing some operations on the clients */
         /* externally so that the data processed has less latency                    */
@@ -370,6 +194,8 @@ class Server
             }
             if (select(nfds, &selected_read_fds, &selected_write_fds, NULL, timeout_ptr) == -1)
             {
+                if (errno == EINTR || errno == ENOMEM)
+                    return (true);
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed: " << strerror(errno));
                 throw SelectException();
             }
@@ -392,30 +218,25 @@ class Server
                 }
             }
 
-            // look for connections on ipv4 
-            if (FD_ISSET(this->_socket, &selected_read_fds))
+            for (const ServerEndpoint& ep : this->endpoints)
             {
-                // client tries to connect
-                this->_accept();
-            }
-
-            if (this->enable_IPv6)
-            {
-                // look for connections on ipv6 
-                if (FD_ISSET(this->_socket6, &selected_read_fds))
+                if (FD_ISSET(ep.getSocket(), &selected_read_fds))
                 {
-                    // client tries to connect
-                    this->_accept6();
+#ifdef ENABLE_TLS
+                    if (ep.useTLS())
+                        this->_accept_ssl(ep);
+                    else 
+#endif
+                    if (ep.getAddressFamily() == AF_INET)
+                    {
+                        this->_accept(ep);
+                    }
+                    else if (ep.getAddressFamily() == AF_INET6)
+                    {
+                        this->_accept6(ep);
+                    }
                 }
             }
-
-#ifdef  ENABLE_TLS
-            // look for connections on TLS
-            if (FD_ISSET(this->_ssl_socket, &selected_read_fds))
-            {
-                this->_accept_ssl();
-            }
-#endif
 
             return (running);
         }
@@ -426,6 +247,8 @@ class Server
         typedef H                           handler_type;
         typedef typename H::client_type     client_type;
         typedef Server<H>                   server_type;
+        typedef ServerEndpoint              endpoint_type;
+        typedef std::list<ServerEndpoint>   endpoint_list_type;
 
         struct functor_handler
         {
@@ -489,7 +312,7 @@ class Server
         void    emit(const std::string& message, const T& to_emit, client_type& client)
         { 
             this->_emit_base(message, to_emit, client);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted from " << client.getFullAddress())
+            LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted to client from " << client.getHostname())
         }
         
         /* emit_now emits the same way emit does, however it doesn't wait for wait_update() to be sent   */
@@ -506,7 +329,7 @@ class Server
             this->emit(message, to_emit, client);
             try {
                 return this->_send_data(client);
-            } catch (SendException e)
+            } catch (SendException& e)
             {
                 return (false);
             }
@@ -521,7 +344,7 @@ class Server
             try {
                 for (client_type& client : this->_clients)
                     emitted_all += this->_send_data(client);
-            } catch (SendException e)
+            } catch (SendException& e)
             {
                 return (false);
             }
@@ -537,23 +360,24 @@ class Server
         bool    disconnect(client_type& client)
         {
             int socket = client.getSocket();
+            std::string address = client.getHostname();
 
 #ifdef ENABLE_TLS
-            if (client._is_ssl && client._ssl != nullptr)
+            if (client._is_ssl && client._ssl_connection != nullptr)
             {
-                SSL_free(client._ssl);
+                SSL_free(client._ssl_connection);
             }
 #endif
 
             if (this->_clients.erase(socket) == 0)
             {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "trying to disconnect unkown client from socket " << socket)
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "trying to disconnect unkown client with socket " << socket << " from address " << address)
                 return false;
             }
             FD_CLR(socket, &this->_read_fds);
             ::close(socket);
             this->n_clients_connected--;
-            LOG_INFO(LOG_CATEGORY_NETWORK, "client disconnected from socket " << socket);
+            LOG_INFO(LOG_CATEGORY_NETWORK, "client from " << address << " disconnected");
             return (true);
         }
 
@@ -585,109 +409,7 @@ class Server
 
     private:
 
-        /* ================================================ */
-        /* Socket init                                      */
-        /* ================================================ */
-
-        void _init_socket_base(int& sock, sockaddr_in& address, const int max_pending_connections)
-        {
-            sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (sock <= 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Socket syscall failed for address initialization on port " << ntohs(address.sin_port) << ": " << strerror(errno));
-                throw SocketException();
-            }
-
-            if (bind(sock, (sockaddr*)(&address), sizeof(address)) != 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address initialization on port " << ntohs(address.sin_port) << ": " << strerror(errno));
-                throw BindException();
-            }
-
-            if (listen(sock, max_pending_connections) != 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Listen syscall failed for address initialization on port " << ntohs(address.sin_port) << ": " << strerror(errno));
-                throw ListenException();
-            }
-
-            FD_SET(sock, &this->_read_fds);
-        }
-
-        void    _init_socket4(const int max_pending_connections)
-        {
-            this->_init_socket_base(this->_socket, this->_address, max_pending_connections);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Server started listening on address " << this->ip_address << " on port " << this->port);
-        }
-
-        void    _init_socket6(const int max_pending_connections)
-        {
-            this->_socket6 = socket(AF_INET, SOCK_STREAM, 0);
-            if (this->_socket6 <= 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Socket syscall failed for address initialization on port " << ntohs(this->_address6.sin6_port) << ": " << strerror(errno));
-                throw SocketException();
-            }
-
-            if (bind(this->_socket6, (sockaddr*)(&this->_address6), sizeof(this->_address6)) != 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address initialization on port " << ntohs(this->_address6.sin6_port) << ": " << strerror(errno));
-                throw BindException();
-            }
-
-            if (listen(this->_socket6, max_pending_connections) != 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Listen syscall failed for address initialization on port " << ntohs(this->_address6.sin6_port) << ": " << strerror(errno));
-                throw ListenException();
-            }
-
-            FD_SET(this->_socket6, &this->_read_fds);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Server started listening on IPv6 on address " << this->ip_address6 << " on port " << (this->port + 1));
-        }
-
 #ifdef ENABLE_TLS
-        void    _init_ssl_socket(const int max_pending_connections)
-        {
-            this->_init_socket_base(this->_ssl_socket, this->_ssl_address, max_pending_connections);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Server started listening on TLS on address " << this->ip_address << " on port " << (this->ssl_port));
-        }
-#endif
-
-        /* ================================================ */
-        /* Address init                                     */
-        /* ================================================ */
-        
-        void    _init_addr4()
-        {
-            this->_address = (sockaddr_in){
-                .sin_family = AF_INET,
-                .sin_port = htons(static_cast<in_port_t>(this->port)),
-            };
-            if (inet_aton(this->ip_address.c_str(), &this->_address.sin_addr) == -1)
-                throw InetException();
-        }
-
-        void    _init_addr6()
-        {
-            this->_address6 = (sockaddr_in6){
-                .sin6_family = AF_INET6,
-                .sin6_port = htons(static_cast<in_port_t>(this->port + 1)),
-            };
-            if (inet_pton(AF_INET6, this->ip_address6.c_str(), &this->_address6) == -1)
-                throw InetException();
-        }
-
-#ifdef ENABLE_TLS
-        void    _init_ssl_addr()
-        {
-            this->_ssl_address = (sockaddr_in){
-                .sin_family = AF_INET,
-                .sin_port = htons(static_cast<in_port_t>(this->ssl_port)),
-            };
-            if (inet_aton(this->ip_address.c_str(), &this->_ssl_address.sin_addr) == -1)
-                throw InetException();
-        }
-
-
         /* ================================================ */
         /* SSL context init                                 */
         /* ================================================ */
@@ -709,7 +431,7 @@ class Server
             int no_cert_or_key = 0;
             if (this->ssl_cert_file.empty() && ++no_cert_or_key)
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "No certificate provided for server that enables TLS.")
-            else if (this->ssl_private_key_file.empty() && ++no_cert_or_key)
+            if (this->ssl_private_key_file.empty() && ++no_cert_or_key)
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "No private key provided for server that enables TLS.")
             if (no_cert_or_key != 0)
                 throw SSLCertException();
@@ -740,61 +462,97 @@ class Server
         /* Accept Handlers                                  */
         /* ================================================ */
 
-        int     _accept()
+        int     _accept(const ServerEndpoint& endpoint)
         {
             sockaddr_in     client_addr;
             socklen_t       len;
-            int client_socket = ::accept(this->_socket, (sockaddr*)&client_addr, &len);
+            int client_socket = ::accept(endpoint.getSocket(), (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed with error: " << std::strerror(errno));
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
                 throw AcceptException();
             }
             if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
             {
                 LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
                 // cannot accept more clients
-                close (client_socket);
+                ::close(client_socket);
                 return (-1);
             }
-            this->n_clients_connected++;
             
-            std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr)));
-            if (insertion.second == false)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed for client just arrived from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
-                ::close(client_socket);
-                throw AcceptException();
-            }
+            try {
 
-            FD_SET(client_socket, &this->_read_fds);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
-            this->_client_handler.onConnected((*insertion.first).second);
-            return (client_socket);
+                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr)));
+                if (insertion.second == false)
+                {
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
+                    ::close(client_socket);
+                    return (-1);
+                }
+
+                this->n_clients_connected++;
+                FD_SET(client_socket, &this->_read_fds);
+                LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on endpoint " << endpoint.getHostname() << " from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
+                this->_client_handler.onConnected((*insertion.first).second);
+                return (client_socket);
+
+            } catch (std::exception& e)
+            {
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client creation failed for connection on IPv4: " << e.what());
+                ::close(client_socket);
+                return (-1);
+            };
         }
 
-        int     _accept6()
+        int     _accept6(const ServerEndpoint& endpoint)
         {
             sockaddr_in6    client_addr;
             socklen_t       len;
-            int client_socket = ::accept(this->_socket6, (sockaddr*)&client_addr, &len);
+            int client_socket = ::accept(endpoint.getSocket(), (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on IPv6 with error: " << std::strerror(errno));
-                throw AcceptException();
-            }
-            this->n_clients_connected++;
-            std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr, len)));
-            if (insertion.second == false)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed for client just arrived on socket6 " << client_socket);
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on IPv6 on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
                 throw AcceptException();
             }
 
-            FD_SET(client_socket, &this->_read_fds);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on IPv6 from "  << client_socket);
-            this->_client_handler.onConnected((*insertion.first).second);
-            return (client_socket);
+            char address6[INET6_ADDRSTRLEN];
+            if (inet_ntop(AF_INET6, &client_addr.sin6_addr, address6, sizeof(client_addr.sin6_addr)) == NULL)
+            {
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Cannot parse sockaddr_in6 received on IPv6 endpoint " << endpoint.getHostname() << ": " << std::strerror(errno));
+                ::close(client_socket);
+                return (true);
+            }
+            std::string client_ip = std::string(address6, std::strlen(address6));
+
+            if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
+            {
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << client_ip << ":" << ntohs(client_addr.sin6_port));
+                // cannot accept more clients
+                close (client_socket);
+                return (-1);
+            }
+
+            try {
+                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr)));
+                if (insertion.second == false)
+                {
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from "  << client_ip << ":" << ntohs(client_addr.sin6_port));
+                    ::close(client_socket);
+                    return (-1);
+                }
+
+                this->n_clients_connected++;
+                FD_SET(client_socket, &this->_read_fds);
+                LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on IPv6 on endpoint " << endpoint.getHostname() << " from "  << client_ip << ":" << ntohs(client_addr.sin6_port));
+                this->_client_handler.onConnected((*insertion.first).second);
+                return (client_socket);
+            }
+            catch (std::exception &e)
+            {
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client creation failed for connection on IPv6: " << e.what());
+                ::close(client_socket);
+                return (-1);
+            }
         }
 
 #ifdef ENABLE_TLS
@@ -812,28 +570,28 @@ class Server
                 int ssl_error = SSL_get_error(client.getSSL(), accept_error);
                 if (ssl_error == SSL_ERROR_WANT_READ)
                 {
-                    LOG_INFO(LOG_CATEGORY_NETWORK, "SSL accept incomplete, waiting for more data...");
+                    LOG_INFO(LOG_CATEGORY_NETWORK, "SSL accept incomplete, waiting for more data for handshake...");
                     return (0);
                 }
-                LOG_WARN(LOG_CATEGORY_NETWORK, "SSL accept failed for client trying to connect on from " << client.getFullAddress());
+                LOG_WARN(LOG_CATEGORY_NETWORK, "SSL accept failed for client trying to connect on client from " << client.getHostname());
                 ERR_print_errors_fp(stderr);
                 this->disconnect(client);
                 return (-1);
             }
             client._accept_done = true;
-            LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on TLS on from " << client.getFullAddress());
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Upgraded connection to TLS for client connected from " << client.getHostname());
             this->_client_handler.onConnected(client);
             return (1);
         }
 
-        int     _accept_ssl()
+        int     _accept_ssl(const ServerEndpoint& endpoint)
         {
             sockaddr_in     client_addr;
             socklen_t       len;
-            int client_socket = ::accept(this->_ssl_socket, (sockaddr*)&client_addr, &len);
+            int client_socket = ::accept(endpoint.getSocket(), (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed with error: " << std::strerror(errno));
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
                 throw AcceptException();
             }
             if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
@@ -843,23 +601,31 @@ class Server
                 close (client_socket);
                 return (-1);
             }
-            this->n_clients_connected++;
 
             SSL*    ssl = SSL_new(this->_ssl_ctx);
             SSL_set_fd(ssl, client_socket);
             SSL_set_accept_state(ssl);
 
-            std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr, ssl)));
-            if (insertion.second == false)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed for client just arrived from " << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
-                ::close(client_socket);
-                throw AcceptException();
-            }
+            try {
+                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr, ssl)));
+                if (insertion.second == false)
+                {
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from " << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
+                    ::close(client_socket);
+                    return (-1);
+                }
 
-            FD_SET(client_socket, &this->_read_fds);
-            LOG_INFO(LOG_CATEGORY_NETWORK, "New client was accepted on TLS port " << this->ssl_port << " from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port) << ", waiting for SSL accept...");
-            return (client_socket);
+                this->n_clients_connected++;
+                FD_SET(client_socket, &this->_read_fds);
+                LOG_INFO(LOG_CATEGORY_NETWORK, "New client was accepted on TLS on endpoint " << endpoint.getHostname() << " from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port) << ", waiting for SSL handshake...");
+                return (client_socket);
+            }
+            catch (std::exception &e)
+            {
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Client creation failed for connection on TLS IPv4: " << e.what());
+                ::close(client_socket);
+                return (-1);
+            }
         }
 #endif
 
@@ -884,7 +650,7 @@ class Server
                         return false;
                     return (true);
                 }
-                size = SSL_read(from._ssl, buffer, RECV_BLK_SIZE);
+                size = SSL_read(from._ssl_connection, buffer, RECV_BLK_SIZE);
             }
             else
                 size = recv(from.getSocket(), buffer, RECV_BLK_SIZE, MSG_DONTWAIT);
@@ -917,7 +683,7 @@ class Server
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_client_handler.onMessageMismatch(from, from._received_packet.message_name);
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Cannot get data handler in parsed packet for message `" << from._received_packet.message_name << "` sent on socket " << from.getSocket() << ", this should have been resolved before parsing the packet.");
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Cannot get data handler in parsed packet for message `" << from._received_packet.message_name << "` received on client from " << from.getHostname() << ", this should have been resolved before parsing the packet.");
                     from._cancelPacket();
                     return (true);
                 }
@@ -930,7 +696,7 @@ class Server
                 packed_data_header<0>  data_header;
                 if (!unpack_data_header(data_header, (char*)buffer, size))
                 {
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Invalid new packet from socket " << from.getSocket() << " packet size is smaller than data_header size: cannot parse packet");
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Invalid new packet received on client from " << from.getHostname() << " packet size is smaller than data_header size: cannot parse packet");
                     return (true);
                 }
 
@@ -947,12 +713,12 @@ class Server
                 if (handler == this->_messages_handlers.end())
                 {
                     this->_client_handler.onMessageMismatch(from, message_name);
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << message_name << "` received on socket " << from.getSocket());
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Unknown data handler for message `" << message_name << "` received on client from " << from.getHostname());
                     return (true);
                 }
                 if (handler->second.sizeof_type != data_header.data_size)
                 {
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` received on socket " << from.getSocket() << " doesnt correspond with current message packet type definition: expected a data containing " 
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Packet size for message `" << message_name << "` received on client from " << from.getHostname() << " doesnt correspond with current message packet type definition: expected a data containing " 
                     << handler->second.sizeof_type << " bytes but header specifies " << data_header.data_size << " data bytes");
                     return (true);
                 }
@@ -978,7 +744,7 @@ class Server
             // this should never happen but must be here for security
             if (handler.sizeof_type != from._received_packet.data_size)
             {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Parsed packet received on socket " << from.getSocket() << " size doesn't correspond to size in handler !!!");
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Parsed packet received on client from " << from.getHostname() << " size doesn't correspond to size in handler !!!");
                 from._cancelPacket();
                 return (true);
             }
@@ -1041,20 +807,21 @@ class Server
         {
             if (client._data_to_send.empty())
             {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending on from " << client.getFullAddress() << " however no data is provider to send.")
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending on client from " << client.getHostname() << " however no data is provider to send.")
+                FD_CLR(client.getSocket(), &this->_write_fds);
                 return false;
             }
-            LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to client on from " << client.getFullAddress());
+            LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to client on client from " << client.getHostname());
 #ifdef ENABLE_TLS
             ssize_t sent_bytes;
             if (client._is_ssl)
             {
                 if (!client._accept_done)
                 {
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Attempting to emit on TLS client " << client._socket << " which is not yet accepted, setting emit for later...");
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Attempting to emit on TLS client from " << client.getHostname() << " which is not yet accepted, setting emit for later...");
                     return true;
                 }
-                sent_bytes = SSL_write(client._ssl, client._data_to_send.top().c_str(), client._data_to_send.top().size());
+                sent_bytes = SSL_write(client._ssl_connection, client._data_to_send.top().c_str(), client._data_to_send.top().size());
             }
             else
                 sent_bytes = send(client._socket, client._data_to_send.top().c_str(), client._data_to_send.top().size(), 0);
@@ -1063,12 +830,12 @@ class Server
 #endif
             if (sent_bytes < 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Send from " << client.getFullAddress() << " failed with error: " << std::strerror(errno))
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Send from client from " << client.getHostname() << " failed with error: " << std::strerror(errno))
                 throw server_type::SendException();
             }
             else if (sent_bytes == 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data from " << client.getFullAddress());
+                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data from " << client.getHostname());
                 return false;
             }
             else if ((size_t)sent_bytes != client._data_to_send.top().size())
@@ -1077,7 +844,7 @@ class Server
                 std::string left = client._data_to_send.top().substr(sent_bytes, client._data_to_send.top().length());
                 client._data_to_send.pop();
                 client._data_to_send.push(left);   
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent from " << client.getFullAddress()<< " was cropped for socket " << client.getSocket() << ": " << client._data_to_send.top().length() << " bytes left to send");
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent from client from " << client.getHostname()<< " was cropped: " << client._data_to_send.top().length() << " bytes left to send");
                 return false;
             }
             // sent full packet.
@@ -1094,29 +861,23 @@ class Server
 #define _MAX(a, b) ((a > b) ? a : b)
         int     _get_nfds()
         {
-#ifdef ENABLE_TLS
-            static int nfds = _MAX(_MAX(this->_socket, this->_socket6), _MAX(this->_socket, this->_ssl_socket));
-#else
-            static int nfds = _MAX(this->_socket, this->_socket6);
-#endif
-            static int n_clients = 0;
+            static int nfds = 0;
+            static int n_clients = -1;
 
             // recalculate nfds only when a new client is connected
             if (this->n_clients_connected != n_clients)
             {
                 n_clients = this->n_clients_connected;
-#ifdef ENABLE_TLS
-                nfds = _MAX(_MAX(this->_socket, this->_socket6), _MAX(this->_socket, this->_ssl_socket));
-#else
-                nfds = _MAX(this->_socket, this->_socket6);
-#endif
+                for (const ServerEndpoint &ep : this->endpoints)
+                {
+                    nfds = _MAX(nfds, ep.getSocket());
+                }
                 for (typename Server::client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
                 {
                     nfds = _MAX(nfds, it->second.getSocket());
                 }
-                // calculate nfds on this->_read_fds or this->_clients
             }
-            return (nfds + 1);
+            return (nfds + 1); 
         }
 
 
@@ -1125,33 +886,6 @@ class Server
     /* ================================================ */
 
     public:
-        class SocketException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("socket exception occured: abort");
-                }
-        };
-
-        class BindException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("bind exception occured: abort");
-                }
-        };
-
-        class ListenException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("listen exception occured: abort");
-                }
-        };
-
         class SelectException : std::exception
         {
             public:
@@ -1222,13 +956,9 @@ class Server
     /* ================================================ */
 
     public:
-        std::string ip_address;
-        std::string ip_address6;
+        const endpoint_list_type    endpoints;
 
-        int         port;
 #ifdef ENABLE_TLS
-        int         ssl_port;
-
         std::string ssl_cert_file;
         std::string ssl_private_key_file;
 #endif
@@ -1236,9 +966,6 @@ class Server
         bool        running;
         int         n_clients_connected;
         int         max_connections;
-        bool        enable_IPv6;
-
-
 
 
     /* ================================================ */
@@ -1252,16 +979,7 @@ class Server
         fd_set          _read_fds;
         fd_set          _write_fds;
 
-        int             _socket;
-        int             _socket6;
-        sockaddr_in     _address;
-        sockaddr_in6    _address6;
-
 #ifdef ENABLE_TLS
-        int             _ssl_socket;
-        sockaddr_in     _ssl_address;
-        bool            _ssl_only;
-
         SSL_CTX*            _ssl_ctx;
         const SSL_METHOD*   _ssl_method;
 #endif
