@@ -6,6 +6,12 @@ taskmasterctl
 taskmaster.code-workspace
 .vscode
 *.log
+
+#certs
+*.pem
+*.key
+*.pub
+
 # Prerequisites
 *.d
 
