@@ -69,7 +69,13 @@ class Client : public H::client_data_type, public PacketManager
         typedef typename H::client_data_type    data_type;
 
     public:
-        Client(const std::string& server_ip, const short server_port)
+        /* ================================================ */
+        /* Client constructor                               */
+        /* ================================================ */
+
+        /* Client constructor, can throw an exception if          */
+        /* the specified informations cannot form a valid address */
+        Client(const std::string& server_ip, const short server_port) throw (std::logic_error)
         : data_type(),
           PacketManager(server_ip, server_port, AF_INET),
           connected(false),
@@ -94,15 +100,25 @@ class Client : public H::client_data_type, public PacketManager
         }
 
 
-        /* upgrades to a TLS connection, needs to be called before connect */
-        void    enableTLS()
+        /* ================================================ */
+        /* Public methods                                   */
+        /* ================================================ */
+
+
+        /* set client in TLS mode, and initializes an ssl context, in that mode, */
+        /* client will try to do a handshake with the server upon connection.    */
+        /* this call can throw a SSLInitException                                */
+        void    enableTLS() throw(SSLInitException)
         {
             this->_useTLS = true;
             this->_init_ssl_ctx();
         }
 #endif
 
-        /* connects the client to the server */
+        /* connects the client to the server                                  */
+        /* this call can throw multiple exceptions, if the socket could not   */
+        /* be created a SocketException is thrown, if the client is unable to */
+        /* connect, a ConnectException is thrown.                             */
         void    connect()
         {
             this->_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -162,7 +178,10 @@ class Client : public H::client_data_type, public PacketManager
                 timeout_ptr = &timeout;
             }
             if (select(nfds, &read_set, &write_set, 0, timeout_ptr) < 0)
-                throw SelectException();
+            {
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed with error: " << std::strerror(errno));
+                return (true);
+            }
 
             // data pending to be read
             if (FD_ISSET(this->_socket, &read_set))
@@ -183,14 +202,19 @@ class Client : public H::client_data_type, public PacketManager
         }
 
 
-        /* Message list type definition */
+        /* ================================================ */
+        /* Messages management                              */
+        /* ================================================ */
 
+        /* Message list type definition */
         struct functor_handler
         {
             size_t  sizeof_type;
             void(*handle)(client_type&, DTO*);
         };
 
+        /* handler maker, returns a message_handler_type to be added in the _message_handlers,  */
+        /* it auto calculates the size for the expected T value                                 */
         template<typename T>
         static functor_handler    make_handler(void(*handler_function)(client_type&, DTO*))
         {
@@ -200,11 +224,17 @@ class Client : public H::client_data_type, public PacketManager
             return (handler);
         }
 
-        typedef functor_handler message_handler_type;
-
+        typedef functor_handler                             message_handler_type;
         typedef std::map<std::string, message_handler_type> msg_list_type;
 
-
+        /* Adds a new message handler to the client, the message handler must be created          */
+        /* with client_type::make_handler<T>(message_name, handler_lambda) where T is the         */
+        /* expected data type for that message, message_name is the name of the message           */
+        /* that should contain a valid data for T, and handler_lambda is a c++ lambda function    */
+        /* taking in a reference to client_type, and a DTO* which is a pointer to the begining of */
+        /* the data received which needs to be reinterpreted in T, this can be made safely with   */
+        /* reinterpret_cast<T*>(dto) since data size is checked before, however validity of the   */
+        /* data fields must be checked in handler.                                                */
         void    onMessage(const std::string& name, const message_handler_type& handler)
         {
             // todo see properly why sizeof(packed_data_header<0>::message_name) is not accessible in client 
@@ -226,35 +256,46 @@ class Client : public H::client_data_type, public PacketManager
 
 
 
+        /* ================================================ */
+        /* Emits                                            */
+        /* ================================================ */
 
+        /* queues message to emit T to the server                                          */
+        /* Can throw an InvalidPacketMessageNameException if `message` field is not valid. */
         template<typename T, typename std::size_t S = sizeof(T)>
-        void    emit(const std::string& message, const T& data)
+        void    emit(const std::string& message, const T& data) throw (InvalidPacketMessageNameException)
         {
             this->_emit_base(message, data);
             LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted to the server");
         }
 
-
+        /* emit_now emits the same way emit does, however it doesn't wait for wait_update() to be sent   */
+        /* this is usefull for errors or for emitting something before calling disconnect()              */
+        /* however the server's socket might not be able to receive the packet at the moment it is sent  */
+        /* in that case, the package is queued and emit_now returns false indicating a failure           */
+        /* same thing if send wasn't able to send the packet entierely, emit_now returns false           */
+        /* for that reason, it should be used to send small data structures to ensure data packages are  */
+        /* completely sent.                                                                              */
+        /* Can throw an InvalidPacketMessageNameException if `message` field is not valid.               */
         template<typename T, typename std::size_t S = sizeof(T)>
-        bool    emit_now(const std::string& message, const T& data)
+        bool    emit_now(const std::string& message, const T& data) throw (InvalidPacketMessageNameException)
         {
             this->_emit_base(message, data);
             LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted now to the server");
-            try {
-                return this->_send_data();
-            } catch (SendException& e)
-            {
-                return (false);
-            }
+            return this->_send_data();
         }
         
+        /* ================================================ */
+        /* Other utils                                      */
+        /* ================================================ */
 
-
+        /* Disconnects the client from the server */
         void    disconnect()
         {
             ::close(this->_socket);
 #ifdef ENABLE_TLS
-            SSL_free(this->_ssl_connection);
+            if (this->_ssl_connection != nullptr)
+                SSL_free(this->_ssl_connection);
 #endif
             this->_socket = -1;
             this->connected = false;
@@ -262,13 +303,22 @@ class Client : public H::client_data_type, public PacketManager
             LOG_WARN(LOG_CATEGORY_NETWORK, "Disconnected from server.");
         }
 
-
+        /* returns whether if the client uses TLS for its connection */
+        /* ( set by Client::enableTLS() )                            */
         bool    useTLS() const
         {
             return (this->_useTLS);
         }
 
     
+
+
+
+
+        /* ======================================================================================================== */
+        /* PRIVATE MEMBERS                                                                                          */
+        /* ======================================================================================================== */
+
     private:
 
         /* ================================================ */
@@ -336,7 +386,7 @@ class Client : public H::client_data_type, public PacketManager
             {
                 // we dont know what made recv fail, but for safety disconnect client.
                 this->disconnect();
-                throw RecvException();
+                return (false);
             }
 
             typename Client::msg_list_type::iterator handler = this->_messages_handlers.end();
@@ -427,7 +477,7 @@ class Client : public H::client_data_type, public PacketManager
 
 
         template<typename T, typename std::size_t S = sizeof(T)>
-        void    _emit_base(const std::string& message, const T& data)
+        void    _emit_base(const std::string& message, const T& data) throw (InvalidPacketMessageNameException)
         {
             packed_data<S> pack = pack_data<T>(message, data);
             char    data_buffer[sizeof(packed_data<S>)] = {0};
@@ -436,6 +486,8 @@ class Client : public H::client_data_type, public PacketManager
             this->_data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
             FD_SET(this->_socket, &this->_send_fd);
         }
+
+
 
         bool    _send_data()
         {
@@ -467,7 +519,7 @@ class Client : public H::client_data_type, public PacketManager
             if (sent_bytes < 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Send failed with error: " << std::strerror(errno))
-                throw client_type::SendException();
+                return (false);
             }
             else if (sent_bytes == 0)
             {
@@ -492,16 +544,6 @@ class Client : public H::client_data_type, public PacketManager
 
 
 
-
-        class InetException : std::exception
-        {
-            public:
-                virtual const char *what() const noexcept
-                {
-                    return ("Inet exception");
-                }
-        };
-
         class SocketException : std::exception
         {
             public:
@@ -517,33 +559,6 @@ class Client : public H::client_data_type, public PacketManager
                 virtual const char *what() const noexcept
                 {
                     return ("Connect exception");
-                }
-        };
-
-        class SelectException : std::exception
-        {
-            public:
-                virtual const char *what() const noexcept
-                {
-                    return ("Select exception");
-                }
-        };
-        
-        class SendException : std::exception
-        {
-            public:
-                virtual const char *what() const noexcept
-                {
-                    return ("Send exception");
-                }
-        };
-
-        class RecvException : std::exception
-        {
-            public:
-                virtual const char *what() const noexcept
-                {
-                    return ("Recv exception");
                 }
         };
 

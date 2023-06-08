@@ -6,12 +6,12 @@
 #include <exception>
 
 
-class InvalidPacketException : std::exception
+class InvalidPacketMessageNameException : std::exception
 {
     public:
         const char *what() const noexcept
         {
-            return ("Invalid packet");
+            return ("Invalid packet message name, name of packet is constrained to this set of characters [A-Z][a-z][0-9][_,-,/,.,[,],<,>]");
         }
 };
 
@@ -33,7 +33,7 @@ struct packed_data
 
 // data packer, packs data of T into a packed_data<sizeof(T)> struct with a message name 
 template<typename T, std::size_t S = sizeof(T)>
-packed_data<S> pack_data(const std::string& message_name, const T& data) throw(InvalidPacketException)
+packed_data<S> pack_data(const std::string& message_name, const T& data) throw(InvalidPacketMessageNameException)
 {
     packed_data<S>  pack;
 
@@ -41,7 +41,7 @@ packed_data<S> pack_data(const std::string& message_name, const T& data) throw(I
     pack.header.data_size = sizeof(T);
     if (!is_valid_message_name(pack.header))
     {
-        throw InvalidPacketException();
+        throw InvalidPacketMessageNameException();
     }
     std::memcpy(pack.data, &data, S);
     return (pack);

@@ -35,7 +35,7 @@ class TaskmasterClientsManager : public ServerClientsHandler<TaskmasterClientsMa
 
 		void onConnected(client_type& client)
 		{
-			if (client.isSSL())
+			if (client.useTLS())
 				std::cout << client.getCertificate() << std::endl;
 		}
 

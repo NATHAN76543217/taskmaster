@@ -32,14 +32,15 @@ class ServerClient : public D, public PacketManager
     public:
         // constructor for IPv4
         ServerClient(const int socket, const struct sockaddr_in& addr, SSL* ssl = nullptr) throw(std::logic_error)
-            : D(), PacketManager(addr), _socket(socket), _ssl_connection(ssl), _is_ssl(ssl != nullptr), _accept_done(false)
+            : D(), PacketManager(addr), _socket(socket), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
             {} 
 
         // constructor for IPv6
         ServerClient(const int socket, const struct sockaddr_in6& addr, SSL* ssl = nullptr) throw(std::logic_error)
-            : D(), PacketManager(addr), _socket(socket), _ssl_connection(ssl), _is_ssl(ssl != nullptr), _accept_done(false)
+            : D(), PacketManager(addr), _socket(socket), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
             {} 
 #else
+        // constructor for IPv4
         ServerClient(const int socket, const struct sockaddr_in& addr) throw(std::logic_error)
             : D(), PacketManager(addr), _socket(socket)
             {} 
@@ -53,12 +54,12 @@ class ServerClient : public D, public PacketManager
 
 #ifdef ENABLE_TLS
         SSL    *getSSL() const { return this->_ssl_connection; }
-        bool    isSSL() const { return this->_is_ssl; }
+        bool    useTLS() const { return this->_useTLS; }
 
         // todo 
         std::string getCertificate()
         {
-            if (!this->_is_ssl)
+            if (!this->_useTLS)
                 return "";
 
             X509 *cert;
@@ -91,9 +92,9 @@ class ServerClient : public D, public PacketManager
         int         _socket;
 
 #ifdef ENABLE_TLS
-        SSL    *_ssl_connection;
-        bool    _is_ssl;
-        bool    _accept_done;
+        SSL         *_ssl_connection;
+        const bool  _useTLS;
+        bool        _accept_done;
 #endif
 
     friend class Server<H>;

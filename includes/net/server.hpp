@@ -32,6 +32,7 @@
 #include "server/ServerClientsHandler.hpp"
 #include "server/ServerEndpoint.hpp"
 
+/* Example client Data */
 class DefaultClientData
 {
     // data per client
@@ -39,7 +40,7 @@ class DefaultClientData
     // ...
 };
 
-/* Example client handler */
+/* Example clients handler */
 class DefaultClientHandler : ServerClientsHandler<DefaultClientHandler, DefaultClientData>
 {
     // struct ExampleDto : DTO
@@ -86,8 +87,11 @@ class Server
         /* Constructors                                     */
         /* ================================================ */
 
-
-        Server(const std::list<ServerEndpoint>& endpoints)
+        /* Server constructor for multiple endpoints                               */
+        /* this call can throw if one of the endpoints contains an invalid address */
+        /* and thus needs to be catched.                                           */
+        /* If TLS is enabled, it can also throw a SSLInitException.                */
+        Server(const std::list<ServerEndpoint>& endpoints) throw(std::logic_error)
         : endpoints(endpoints),
           running(false),
           n_clients_connected(0),
@@ -110,6 +114,10 @@ class Server
         }
 
 
+
+        /* Server constructor for single endpoint                                  */
+        /* this call can throw if the endpoint contains an invalid address.        */
+        /* If TLS is enabled, it can also throw a SSLInitException.                */
 #ifdef ENABLE_TLS
         Server(const std::string& ip_address, const int port, const bool useTLS = false, const sa_family_t family = AF_INET)
         : Server(std::list<ServerEndpoint>(1, ServerEndpoint(ip_address, port, useTLS, family)))
@@ -126,11 +134,7 @@ class Server
 
         ~Server()
         {
-            for (typename client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
-                ::close(it->second.getSocket());
-
-            for (const ServerEndpoint& ep : this->endpoints)
-                ::close(ep.getSocket());
+            this->shutdown();
             
 #ifdef ENABLE_TLS
             SSL_CTX_free(this->_ssl_ctx);
@@ -142,9 +146,12 @@ class Server
         /* Public Members                                   */
         /* ================================================ */
 
-        /* Makes the server starts listening,                                       */
-        /* after that, wait_update should be called to gather informations.         */
-        void    start_listening(int max_pending_connections = 10)
+        /* Makes the server starts listening,                                          */
+        /* after that, wait_update should be called to gather informations.            */
+        /* This call can throw an exception if any of the specified endpoints cannot   */
+        /* bind the specified address of that listen fails, when TLS is used, it loads */
+        /* the certificates and can thus throw a SSLCertException                      */
+        void    start_listening(int max_pending_connections = 10) throw(std::logic_error)
         {
 #ifdef ENABLE_TLS
             bool enablesTLS = false;
@@ -175,7 +182,7 @@ class Server
         /* It returns true if the server is still active after completion            */
         /* If specified, a timeout argument can be set to define the                 */
         /* timeout in ms for select                                                  */
-        bool    wait_update(const int timeout_ms = -1)
+        bool    wait_update(const int timeout_ms = -1) noexcept
         {
             if (!running)
                 return (false);
@@ -197,7 +204,7 @@ class Server
                 if (errno == EINTR || errno == ENOMEM)
                     return (true);
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed: " << strerror(errno));
-                throw SelectException();
+                return (true);
             }
 
             // look for clients receive
@@ -256,6 +263,8 @@ class Server
             void(*handle)(server_type&, client_type&, DTO*);
         };
 
+        /* handler maker, returns a message_handler_type to be added in the _message_handlers,  */
+        /* it auto calculates the size for the expected T value                                 */
         template<typename T>
         static functor_handler    make_handler(void(*handler_function)(server_type&, client_type&, DTO*))
         {
@@ -276,7 +285,16 @@ class Server
         /* Messages management                              */
         /* ================================================ */
 
-        void    onMessage(const std::string& name, message_handler_type handler)
+        /* Adds a new message handler to the server, the message handler must be created          */
+        /* with server_type::make_handler<T>(message_name, handler_lambda) where T is the         */
+        /* expected data type for that message, message_name is the name of the message           */
+        /* that should contain a valid data for T, and handler_lambda is a c++ lambda function    */
+        /* taking in a reference to server_type, a reference to client_type which is a reference  */
+        /* to the client which sent the message, and a DTO* which is a pointer to the begining of */
+        /* the data received which needs to be reinterpreted in T, this can be made safely with   */
+        /* reinterpret_cast<T*>(dto) since data size is checked before, however validity of the   */
+        /* data fields must be checked in handler.                                                */
+        void    onMessage(const std::string& name, message_handler_type handler) noexcept
         {
             if (name.length() > sizeof(packed_data_header<0>::message_name))
             {
@@ -300,7 +318,7 @@ class Server
 
         /* emits T to all clients connected as ServerClient */
         template<typename T>
-        void    emit(const std::string& message, const T& to_emit)
+        void    emit(const std::string& message, const T& to_emit) throw(InvalidPacketMessageNameException)
         { 
             for (client_type& client : this->_clients)
                 this->_emit_base(message, to_emit);
@@ -309,7 +327,7 @@ class Server
     
         /* emits T to the client specified as `client` */
         template<typename T>
-        void    emit(const std::string& message, const T& to_emit, client_type& client)
+        void    emit(const std::string& message, const T& to_emit, client_type& client) throw(InvalidPacketMessageNameException)
         { 
             this->_emit_base(message, to_emit, client);
             LOG_INFO(LOG_CATEGORY_NETWORK, "set `" << message << "` to be emitted to client from " << client.getHostname())
@@ -320,34 +338,23 @@ class Server
         /* however the client's socket might not be able to receive the packet at the moment it is sent  */
         /* in that case, the package is queued and emit_now returns false indicating a failure           */
         /* same thing if send wasn't able to send the packet entierely, emit_now returns false           */
-        /* ! IT WILL NOT SEND THE LEFTOVER PACKET IF IT WASN'T ABLE TO SENT IT ENTIERLY !                */
         /* for that reason, it should be used to send small data structures to ensure data packages are  */
         /* completely sent.                                                                              */
         template<typename T>
-        bool    emit_now(const std::string& message, const T& to_emit, client_type& client)
+        bool    emit_now(const std::string& message, const T& to_emit, client_type& client) throw(InvalidPacketMessageNameException)
         { 
             this->emit(message, to_emit, client);
-            try {
-                return this->_send_data(client);
-            } catch (SendException& e)
-            {
-                return (false);
-            }
-            return (true);
+            return this->_send_data(client);
         }
 
+        /* emit_now to every client on the server */
         template<typename T>
-        bool    emit_now(const std::string& message, const T& to_emit)
+        bool    emit_now(const std::string& message, const T& to_emit) throw(InvalidPacketMessageNameException)
         { 
             this->emit(message, to_emit);
             int emitted_all = 0;
-            try {
-                for (client_type& client : this->_clients)
-                    emitted_all += this->_send_data(client);
-            } catch (SendException& e)
-            {
-                return (false);
-            }
+            for (client_type& client : this->_clients)
+                emitted_all += this->_send_data(client);
             return (emitted_all == this->_clients.size());
         }
 
@@ -363,7 +370,7 @@ class Server
             std::string address = client.getHostname();
 
 #ifdef ENABLE_TLS
-            if (client._is_ssl && client._ssl_connection != nullptr)
+            if (client._useTLS && client._ssl_connection != nullptr)
             {
                 SSL_free(client._ssl_connection);
                 client._ssl_connection = nullptr;
@@ -382,20 +389,24 @@ class Server
             return (true);
         }
 
-
+        /* shutdowns the server an closes all connections */
         void    shutdown()
         {
-            ::close(this->_socket);
-            ::close(this->_socket6);
+            for (typename client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
+                ::close(it->second.getSocket());
+
+            for (const ServerEndpoint& ep : this->endpoints)
+                ::close(ep.getSocket());
             this->running = false;
         }
 
-
+        /* gets a specific client by socket id              */
         client_type&    getClient(const int socket)
         {
             return this->_clients.at(socket);
         }
-        
+
+        /* gets a const reference to the whole clients list */
         const client_list_type& getClients() const
         {
             return this->_clients;
@@ -404,9 +415,12 @@ class Server
 
 
 
-        /* ================================================ */
-        /* PRIVATE MEMBERS                                  */
-        /* ================================================ */
+
+
+
+        /* ======================================================================================================== */
+        /* PRIVATE MEMBERS                                                                                          */
+        /* ======================================================================================================== */
 
     private:
 
@@ -471,7 +485,7 @@ class Server
             if (client_socket <= 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
-                throw AcceptException();
+                return (-1);
             }
             if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
             {
@@ -513,7 +527,7 @@ class Server
             if (client_socket <= 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on IPv6 on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
-                throw AcceptException();
+                return (-1);
             }
 
             char address6[INET6_ADDRSTRLEN];
@@ -592,7 +606,7 @@ class Server
             if (client_socket <= 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
-                throw AcceptException();
+                return (-1);
             }
             if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
             {
@@ -641,7 +655,7 @@ class Server
             uint8_t buffer[RECV_BLK_SIZE] = {0};
 #ifdef ENABLE_TLS
             ssize_t size;
-            if (from._is_ssl)
+            if (from._useTLS)
             {
                 if (!from._accept_done)
                 {
@@ -667,8 +681,9 @@ class Server
             else if (size < 0)
             {
                 // we dont know what made recv fail, but for safety disconnect client.
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Recv failed for client from " << from.getHostname() << ", disconnecting client for safety.");
                 this->disconnect(from);
-                throw RecvException();
+                return (false);
             }
 
             typename Server::msg_list_type::iterator handler = this->_messages_handlers.end();
@@ -790,7 +805,7 @@ class Server
         /* ================================================ */
 
         template<typename T, typename std::size_t S = sizeof(T)>
-        void    _emit_base(const std::string& message, const T& to_emit, client_type& client)
+        void    _emit_base(const std::string& message, const T& to_emit, client_type& client) throw(InvalidPacketMessageNameException)
         {
             packed_data<S> pack = pack_data<T>(message, to_emit);
             char    data_buffer[sizeof(packed_data<S>)] = {0};
@@ -805,6 +820,7 @@ class Server
         /* Send data                                        */
         /* ================================================ */
 
+        // Sends the data queued for client, returns true if data was flushed entierly.
         bool    _send_data(client_type& client)
         {
             if (client._data_to_send.empty())
@@ -816,12 +832,12 @@ class Server
             LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to client on client from " << client.getHostname());
 #ifdef ENABLE_TLS
             ssize_t sent_bytes;
-            if (client._is_ssl)
+            if (client._useTLS)
             {
                 if (!client._accept_done)
                 {
                     LOG_WARN(LOG_CATEGORY_NETWORK, "Attempting to emit on TLS client from " << client.getHostname() << " which is not yet accepted, setting emit for later...");
-                    return true;
+                    return false;
                 }
                 sent_bytes = SSL_write(client._ssl_connection, client._data_to_send.top().c_str(), client._data_to_send.top().size());
             }
@@ -833,7 +849,7 @@ class Server
             if (sent_bytes < 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Send from client from " << client.getHostname() << " failed with error: " << std::strerror(errno))
-                throw server_type::SendException();
+                return false;
             }
             else if (sent_bytes == 0)
             {
@@ -888,70 +904,19 @@ class Server
     /* ================================================ */
 
     public:
-        class SelectException : std::exception
+        
+        class SSLInitException : std::logic_error
         {
             public:
-                const char *what() const noexcept
-                {
-                    return ("select exception occured: abort");
-                }
+                SSLInitException() : std::logic_error("SSL cannot initialize: abort") {}
         };
 
-        class AcceptException : std::exception
+        class SSLCertException : std::logic_error
         {
             public:
-                const char *what() const noexcept
-                {
-                    return ("accept exception occured: abort");
-                }
-        };
-
-        class InetException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("inet exception occured: abort");
-                }
-        };
-
-        class RecvException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("recv exception occured: abort");
-                }
-        };
-
-        class SendException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("send exception occured: abort");
-                }
+                SSLCertException() : std::logic_error("SSL cannot load cert or key file: abort") {}
         };
         
-        class SSLInitException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("SSL cannot initialize: abort");
-                }
-        };
-
-        class SSLCertException : std::exception
-        {
-            public:
-                const char *what() const noexcept
-                {
-                    return ("SSL cannot load cert or key file: abort");
-                }
-        };
-        
-
 
     /* ================================================ */
     /* Public attributes                                */
