@@ -160,16 +160,18 @@ class Tintin_reporter
 		{
 			private:
 				std::string _filename;
+				std::string	_out;
 
 			public:
 				defaultFileException(const std::string filename = "")
 				{
 					this->_filename = filename;
+					this->_out = "Impossible to open default file '" + this->_filename + "'.";
 				}
 
 				virtual const char* what() const noexcept
 				{
-					return std::string("Impossible to open default file '" + this->_filename + "'.").c_str();
+					return (this->_out.c_str());
 				}
 		};
 
