@@ -23,7 +23,7 @@
 #define FD_COPY(src, dst) std::memcpy(dst, src, sizeof(*(src)))
 #endif
 
-#include "common/packet.hpp"
+#include "common/PacketManager.hpp"
 #include "common/dto_base.hpp"
 #include "client/ClientHandler.hpp"
 
@@ -131,7 +131,7 @@ class Client : public H::client_data_type, public PacketManager
                 throw ConnectException();
             }
             FD_SET(this->_socket, &this->_read_fd);
-
+            this->connected = true;
 #ifdef ENABLE_TLS
             if (this->_useTLS)
             {
@@ -146,13 +146,12 @@ class Client : public H::client_data_type, public PacketManager
             else
             {
                 this->_handler.onConnected();
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on address " << this->_ip_address << " on port " << this->_port);
             }
 #else // connection is set later for ssl handshake to take place
             
             this->_handler.onConnected();
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on address " << this->_ip_address << " on port " << this->_port);
 #endif 
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on host " << this->getHostname() << " on port " << this->_port);
         }
 
 
@@ -198,7 +197,7 @@ class Client : public H::client_data_type, public PacketManager
                 this->_send_data();
             }
 
-            return (true);
+            return (this->connected);
         }
 
 
@@ -360,7 +359,7 @@ class Client : public H::client_data_type, public PacketManager
             FD_CLR(this->_socket, &this->_send_fd);
             this->_handshake_done = true;
             this->_handler.onConnected();
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Client connected on TLS on address " << this->_ip_address << " on port " << this->_port);
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Client upgraded connection to TLS successfully");
             return (1);
         }
 #endif

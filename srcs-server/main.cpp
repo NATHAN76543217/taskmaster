@@ -181,9 +181,9 @@ int main(int ac, char** av)
 		LOG_INFO(LOG_CATEGORY_INIT, "Started daemon");
 
 		std::list<ServerEndpoint> endpoints;
-		endpoints.emplace_back(ServerEndpoint("127.0.0.1", 8080, false, AF_INET));
-		endpoints.emplace_back(ServerEndpoint("127.0.0.1", 4040, true, AF_INET));
-		endpoints.emplace_back(ServerEndpoint("::1", 6060, false, AF_INET6));
+		endpoints.emplace_back(ServerEndpoint("localhost", 8080, false, AF_INET));
+		endpoints.emplace_back(ServerEndpoint("localhost", 4040, true, AF_INET));
+		endpoints.emplace_back(ServerEndpoint("localhost", 6060, false, AF_INET6));
 		Server<TaskmasterClientsManager>	*server = new Server<TaskmasterClientsManager>(endpoints);
 		server->ssl_cert_file = 		"./certificates/cert.pem";
 		server->ssl_private_key_file =	"./certificates/cert.pem";

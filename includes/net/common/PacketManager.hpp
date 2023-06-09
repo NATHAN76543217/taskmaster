@@ -4,23 +4,26 @@
 #include <stack>
 
 #include "packed_data.hpp"
-#include "NetObject.hpp"
+#include "InetAddress.hpp"
 
 #include "Tintin_reporter.hpp"
 
 #define MAX_PACKET_SIZE 1024
 
-class PacketManager : public NetObject
+class PacketManager : public InetAddress
 {
     protected:
+        PacketManager(const InetAddress& addr_info)
+        : InetAddress(addr_info) {}
+
         PacketManager(const struct sockaddr_in& addr)
-        : NetObject(addr) {}
+        : InetAddress(addr) {}
 
         PacketManager(const struct sockaddr_in6& addr)
-        : NetObject(addr) {}
+        : InetAddress(addr) {}
         
         PacketManager(const std::string& ip, const int port, const sa_family_t family)
-        : NetObject(ip, port, family) {}
+        : InetAddress(ip, port, family) {}
 
         void    _cancelPacket()
         {
@@ -59,10 +62,10 @@ class PacketManager : public NetObject
             // packet completed, needs to be flushed by _cancelPacket() call
             if (packet_hdr.data_size == buffer_size - sizeof(packet_hdr))
             {
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Completed packet from " << this->getHostname() << "  for message `" << this->_received_packet.message_name << "`.");
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Completed packet from " << this->getHostname() << " for message `" << this->_received_packet.message_name << "`.");
                 return (0);
             }
-            LOG_INFO(LOG_CATEGORY_NETWORK, "Queued new incomplete packet from " << this->getHostname() << "  for message `" << this->_received_packet.message_name << "`,  misses " << (this->_received_packet.data_size - this->_received_packet.data.length()) << " data bytes");
+            LOG_INFO(LOG_CATEGORY_NETWORK, "Queued new incomplete packet from " << this->getHostname() << " for message `" << this->_received_packet.message_name << "`,  misses " << (this->_received_packet.data_size - this->_received_packet.data.length()) << " data bytes");
             return (1);
         }
 

@@ -45,10 +45,13 @@ int main(int ac, char **av)
     std::string serverIp;
     int         serverPort;
 
+    bool        tls = false;
+
 	ARG_INIT(
 		ARG_GROUP("server", "Daemonized server running taskmaster",
 			ARG<std::string>("-i", "--ip", "ip address of taskmaster server", &serverIp, ARG_REQUIRED),
-			ARG<int>("-p", "--port", "port of taskmaster server", &serverPort, ARG_REQUIRED)
+			ARG<int>("-p", "--port", "port of taskmaster server", &serverPort, ARG_REQUIRED),
+			ARG_NOVALUE("-t", "--tls", "use tls for connection", &tls)
 		),
 		ARG_NOVALUE("-h", "--help", "shows this usage", &help)
 	);
@@ -79,7 +82,8 @@ int main(int ac, char **av)
 
 
     Client<TaskmasterClientHandler> *client = new Client<TaskmasterClientHandler>(serverIp, serverPort);
-    client->enableTLS();
+    if (tls)
+        client->enableTLS();
     client->connect();
 
     do

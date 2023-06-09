@@ -30,24 +30,12 @@ class ServerClient : public D, public PacketManager
 #ifdef ENABLE_TLS
     
     public:
-        // constructor for IPv4
-        ServerClient(const int socket, const struct sockaddr_in& addr, SSL* ssl = nullptr) throw(std::logic_error)
-            : D(), PacketManager(addr), _socket(socket), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
-            {} 
-
-        // constructor for IPv6
-        ServerClient(const int socket, const struct sockaddr_in6& addr, SSL* ssl = nullptr) throw(std::logic_error)
-            : D(), PacketManager(addr), _socket(socket), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
+        ServerClient(const int socket, const InetAddress& addr_info, SSL* ssl = nullptr) throw(std::logic_error)
+            : D(), PacketManager(addr_info), _socket(socket), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
             {} 
 #else
-        // constructor for IPv4
-        ServerClient(const int socket, const struct sockaddr_in& addr) throw(std::logic_error)
-            : D(), PacketManager(addr), _socket(socket)
-            {} 
-
-        // constructor for IPv6
-        ServerClient(const int socket, const struct sockaddr_in6& addr) throw(std::logic_error)
-            : D(), PacketManager(addr), _socket(socket)
+        ServerClient(const int socket, const InetAddress& addr_info) throw(std::logic_error)
+            : D(), PacketManager(addr_info), _socket(socket)
             {} 
 #endif
 

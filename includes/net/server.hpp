@@ -26,7 +26,7 @@
 
 #include "Tintin_reporter.hpp"
 
-#include "common/packet.hpp"
+#include "common/PacketManager.hpp"
 #include "common/dto_base.hpp"
 #include "server/ServerClient.hpp"
 #include "server/ServerClientsHandler.hpp"
@@ -480,34 +480,35 @@ class Server
         int     _accept(const ServerEndpoint& endpoint)
         {
             sockaddr_in     client_addr;
-            socklen_t       len;
+            socklen_t       len = sizeof(client_addr);
+            std::memset(&client_addr, 0, len);
             int client_socket = ::accept(endpoint.getSocket(), (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
                 return (-1);
             }
-            if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
-            {
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
-                // cannot accept more clients
-                ::close(client_socket);
-                return (-1);
-            }
             
             try {
-
-                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr)));
+                InetAddress addr_info = InetAddress(client_addr);
+                if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
+                {
+                    LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << addr_info.getHostname());
+                    // cannot accept more clients
+                    ::close(client_socket);
+                    return (-1);
+                }
+                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, addr_info)));
                 if (insertion.second == false)
                 {
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from "  << addr_info.getHostname());
                     ::close(client_socket);
                     return (-1);
                 }
 
                 this->n_clients_connected++;
                 FD_SET(client_socket, &this->_read_fds);
-                LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on endpoint " << endpoint.getHostname() << " from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
+                LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on endpoint " << endpoint.getHostname() << " from "  << addr_info.getHostname());
                 this->_client_handler.onConnected((*insertion.first).second);
                 return (client_socket);
 
@@ -522,43 +523,36 @@ class Server
         int     _accept6(const ServerEndpoint& endpoint)
         {
             sockaddr_in6    client_addr;
-            socklen_t       len;
+            socklen_t       len = sizeof(client_addr);
+            std::memset(&client_addr, 0, len);
             int client_socket = ::accept(endpoint.getSocket(), (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on IPv6 on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
                 return (-1);
             }
-
-            char address6[INET6_ADDRSTRLEN];
-            if (inet_ntop(AF_INET6, &client_addr.sin6_addr, address6, sizeof(client_addr.sin6_addr)) == NULL)
-            {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Cannot parse sockaddr_in6 received on IPv6 endpoint " << endpoint.getHostname() << ": " << std::strerror(errno));
-                ::close(client_socket);
-                return (true);
-            }
-            std::string client_ip = std::string(address6, std::strlen(address6));
-
-            if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
-            {
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << client_ip << ":" << ntohs(client_addr.sin6_port));
-                // cannot accept more clients
-                close (client_socket);
-                return (-1);
-            }
-
+            
             try {
-                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr)));
+                InetAddress addr_info = InetAddress(client_addr);
+                if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
+                {
+                    LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << addr_info.getHostname());
+                    // cannot accept more clients
+                    close (client_socket);
+                    return (-1);
+                }
+                
+                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, addr_info)));
                 if (insertion.second == false)
                 {
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from "  << client_ip << ":" << ntohs(client_addr.sin6_port));
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from "  << addr_info.getHostname());
                     ::close(client_socket);
                     return (-1);
                 }
 
                 this->n_clients_connected++;
                 FD_SET(client_socket, &this->_read_fds);
-                LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on IPv6 on endpoint " << endpoint.getHostname() << " from "  << client_ip << ":" << ntohs(client_addr.sin6_port));
+                LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on IPv6 on endpoint " << endpoint.getHostname() << " from "  << addr_info.getHostname());
                 this->_client_handler.onConnected((*insertion.first).second);
                 return (client_socket);
             }
@@ -601,37 +595,40 @@ class Server
         int     _accept_ssl(const ServerEndpoint& endpoint)
         {
             sockaddr_in     client_addr;
-            socklen_t       len;
+            socklen_t       len = sizeof(client_addr);
+            std::memset(&client_addr, 0, len);
             int client_socket = ::accept(endpoint.getSocket(), (sockaddr*)&client_addr, &len);
             if (client_socket <= 0)
             {
                 LOG_WARN(LOG_CATEGORY_NETWORK, "Accept failed on endpoint " << endpoint.getHostname() << " with error: " << std::strerror(errno));
                 return (-1);
             }
-            if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
-            {
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
-                // cannot accept more clients
-                close (client_socket);
-                return (-1);
-            }
-
-            SSL*    ssl = SSL_new(this->_ssl_ctx);
-            SSL_set_fd(ssl, client_socket);
-            SSL_set_accept_state(ssl);
-
+           
             try {
-                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, client_addr, ssl)));
+                InetAddress addr_info = InetAddress(client_addr);
+                if (this->max_connections > 0 && this->n_clients_connected >= this->max_connections)
+                {
+                    LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << addr_info.getHostname());
+                    // cannot accept more clients
+                    close (client_socket);
+                    return (-1);
+                }
+
+                SSL*    ssl = SSL_new(this->_ssl_ctx);
+                SSL_set_fd(ssl, client_socket);
+                SSL_set_accept_state(ssl);
+                
+                std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, addr_info, ssl)));
                 if (insertion.second == false)
                 {
-                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from " << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port));
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "Client insertion in std::map failed on endpoint " << endpoint.getHostname() << " for client just arrived from " << addr_info.getHostname());
                     ::close(client_socket);
                     return (-1);
                 }
 
                 this->n_clients_connected++;
                 FD_SET(client_socket, &this->_read_fds);
-                LOG_INFO(LOG_CATEGORY_NETWORK, "New client was accepted on TLS on endpoint " << endpoint.getHostname() << " from "  << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port) << ", waiting for SSL handshake...");
+                LOG_INFO(LOG_CATEGORY_NETWORK, "New client was accepted on TLS on endpoint " << endpoint.getHostname() << " from "  << addr_info.getHostname() << ", waiting for SSL handshake...");
                 return (client_socket);
             }
             catch (std::exception &e)
@@ -681,7 +678,7 @@ class Server
             else if (size < 0)
             {
                 // we dont know what made recv fail, but for safety disconnect client.
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Recv failed for client from " << from.getHostname() << ", disconnecting client for safety.");
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Recv failed for client from " << from.getHostname() << ": " << std::strerror(errno) << ", disconnecting client for safety.");
                 this->disconnect(from);
                 return (false);
             }

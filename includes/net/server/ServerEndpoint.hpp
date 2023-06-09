@@ -4,21 +4,21 @@
 #include <arpa/inet.h>
 #include <string>
 #include <exception>
-#include "../common/NetObject.hpp"
+#include "../common/InetAddress.hpp"
 
 #include "Tintin_reporter.hpp"
 
-class ServerEndpoint : public NetObject
+class ServerEndpoint : public InetAddress
 {
     public:
 
 #ifdef ENABLE_TLS
         ServerEndpoint(const std::string& ip_address, const int port, const bool useTLS = false, const sa_family_t family = AF_INET) throw(std::logic_error)
-        : NetObject(ip_address, port, family), _useTLS(useTLS)
+        : InetAddress(ip_address, port, family), _useTLS(useTLS)
 
 #else
         ServerEndpoint(const std::string& ip_address, const int port, const sa_family_t family = AF_INET) throw(std::logic_error)
-        : NetObject(ip_address, port, family)
+        : InetAddress(ip_address, port, family)
 #endif
         {
             this->_socket = ::socket(this->_address_family, SOCK_STREAM, 0);
@@ -62,10 +62,10 @@ class ServerEndpoint : public NetObject
             }
 #ifdef ENABLE_TLS
             if (this->_useTLS)
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Started listening on TLS endpoint " << this->_ip_address << " on port " << this->_port)
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Started listening on TLS endpoint " <<  this->getHostname() << " on port " << this->_port)
             else
 #endif
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Started listening on endpoint " << this->_ip_address << " on port " << this->_port)
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Started listening on endpoint " << this->getHostname() << " on port " << this->_port)
         }
 
         class SocketException : public std::logic_error
