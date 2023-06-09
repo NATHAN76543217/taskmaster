@@ -85,9 +85,9 @@ int main(int ac, char **av)
 	auto screen = ScreenInteractive::Fullscreen();
 
 	SplitLayoutState splitLayoutState;
-	splitLayoutState.jobListSize = RELATIVE_Y(40);
-	splitLayoutState.remoteShellSize = RELATIVE_Y(10);
-	splitLayoutState.outputLogSize = RELATIVE_Y(10);
+	splitLayoutState.serverStatusSize = RELATIVE_Y(30);
+	splitLayoutState.jobListSize = RELATIVE_Y(48);
+	splitLayoutState.configEditorSize = RELATIVE_Y(70);
 	splitLayoutState.contentSize = RELATIVE_X(50);
 	splitLayoutState.mainContentSize = RELATIVE_Y(90);
 
@@ -99,7 +99,6 @@ int main(int ac, char **av)
 
 	auto renderer = Renderer(mainContainer, [&] { return mainContainer->Render() | border; });
 
-	//   screen.Print(renderer);
 	screen.Loop(renderer);
 
     return (EXIT_SUCCESS);

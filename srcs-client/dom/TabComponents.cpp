@@ -3,16 +3,16 @@
 
 Component   leftTab(SplitLayoutState& state)
 {
-    auto container = ServerStatusComponent();
-    container = ResizableSplitBottom(JobsListComponent(), container, &state.jobListSize);
-    container = ResizableSplitBottom(RemoteShellComponent(), container, &state.remoteShellSize);
+    auto container = RemoteShellComponent();
+    container = ResizableSplitTop(JobsListComponent(), container, &state.jobListSize);
+    container = ResizableSplitTop(ServerStatusComponent(), container, &state.serverStatusSize);
     return (container);
 }
 
 Component   rightTab(SplitLayoutState& state)
 {
-    auto container = ConfigEditorComponent();
-    container = ResizableSplitBottom(OutputLogComponent(), container, &state.outputLogSize);
+    auto container = OutputLogComponent();
+    container = ResizableSplitTop(ConfigEditorComponent(), container, &state.configEditorSize);
     return (container);
 }
 

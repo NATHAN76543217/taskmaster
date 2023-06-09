@@ -18,12 +18,12 @@ struct SplitLayoutState
 {
     // left bar components size
     // relative to serverStatus component
+    int serverStatusSize;
     int jobListSize;
-    int remoteShellSize;
 
     // right bar components size
     // relative to configEditor component
-    int outputLogSize;
+    int configEditorSize;
 
     // content size relative between left/right
     int contentSize;
