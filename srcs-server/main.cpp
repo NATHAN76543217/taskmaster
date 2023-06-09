@@ -148,7 +148,6 @@ int main(int ac, char** av)
 		TM->freeLockFile();
 		return EXIT_FAILURE;
 	}
-	// std::cout << Tintin_reporter::getLogManager() << std::endl;
 	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::getLogManager())
 
 # else
