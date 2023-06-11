@@ -202,7 +202,7 @@ int main(int ac, char** av)
 		do
 		{
 			// do taskmaster things...
-			std::cout << "Server POLL" << std::endl;
+			std::cout << "Server loop" << std::endl;
 		}
 		while (server->wait_update());
 

@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include <iostream>
 #include <sys/poll.h>
 #include <vector>
+#include <map>
 
 
 /* SocketsHandler implementation for poll() */
@@ -28,8 +28,6 @@ class SocketsHandler
             poll_fd.revents = 0;
             if (this->_poll_fds.insert(std::make_pair(socketHolder.getSocket(), poll_fd)).second == false)
                 throw std::logic_error("Cannot insert pollfd struct in pollfd list.");
-            
-            std::cout << "added pollfd for sock " << socketHolder.getSocket() << std::endl;
         }
 
         // Deletes the socket from the list of checked sockets
@@ -41,8 +39,6 @@ class SocketsHandler
         {
             if (this->_poll_fds.erase(socketHolder.getSocket()) == 0)
                 throw (std::logic_error("trying to delete a socket that is not in pollfd list."));
-            
-            std::cout << "removed pollfd for sock " << socketHolder.getSocket() << std::endl;
         }
 
         // Set the socket flag for reading for socket depending on selected
@@ -133,7 +129,6 @@ class SocketsHandler
 
             if (n == this->_poll_fds_aligned.size())
             {
-                std::cout << "no more sock ev" << std::endl;
                 return (_SOCKET_END);
             }
             while (n < this->_poll_fds_aligned.size())
@@ -141,13 +136,11 @@ class SocketsHandler
                 const pollfd& fd = this->_poll_fds_aligned.at(n);
                 if (fd.revents != 0)
                 {
-                    std::cout << "sock has event " << fd.fd << " ev: " << fd.revents << std::endl;
                     ++n;
                     return socket_event(fd.fd, fd.revents);
                 }
                 ++n;
             }
-                std::cout << "no more sock ev" << std::endl;
             return (_SOCKET_END);
         }
 
@@ -163,30 +156,3 @@ class SocketsHandler
         // number of touches to the _poll_fds list, if touches are 0 when polling, 
         // there is no need to reconstruct the _poll_fds_aligned
 };
-
-
-std::string str = "add string \"this is a string with space!\"";
-
-std::vector<std::string>    getArgs(const std::string &str)
-{
-    std::vector<std::string>  out;
-
-    for( size_t i=0; i<str.length(); i++){
-
-        char c = str[i];
-        if( c == ' ' ){
-            out.push_back("");
-        }
-        else if(c == '\"' ){
-            i++;
-            while( str[i] != '\"' )
-            {
-                *out.rbegin() += str[i++]; 
-            }
-        } else {
-            *out.rbegin() += c;
-        }
-    }
-
-    return out;
-}
