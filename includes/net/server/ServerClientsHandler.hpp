@@ -16,10 +16,10 @@ template<typename T, typename D>
 class ServerClientsHandler
 {
     public:
-        typedef D                                   client_data_type;
-        typedef ServerClient<T, client_data_type>   client_type;
-        typedef Server<T>                           server_type;
-        typedef ServerClientsHandler<T, D>          handler_type;
+        typedef D                                       client_data_type;
+        typedef ServerClient<T, client_data_type>       client_type;
+        typedef Server<T>                               server_type;
+        typedef ServerClientsHandler<T, D>              handler_type;
     
     public:
         ServerClientsHandler(server_type& server)

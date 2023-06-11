@@ -8,29 +8,29 @@
 
 #include "Tintin_reporter.hpp"
 
-class ServerEndpoint : public InetAddress
+class ServerEndpoint : public InetAddress, public TcpSocket
 {
     public:
 
 #ifdef ENABLE_TLS
         ServerEndpoint(const std::string& ip_address, const int port, const bool useTLS = false, const sa_family_t family = AF_INET) throw(std::logic_error)
-        : InetAddress(ip_address, port, family), _useTLS(useTLS)
+        : InetAddress(ip_address, port, family), TcpSocket(this->getAddressFamily()), _useTLS(useTLS)
 
 #else
         ServerEndpoint(const std::string& ip_address, const int port, const sa_family_t family = AF_INET) throw(std::logic_error)
-        : InetAddress(ip_address, port, family)
+        : InetAddress(ip_address, port, family), TcpSocket(this->getAddressFamily())
 #endif
         {
-            this->_socket = ::socket(this->_address_family, SOCK_STREAM, 0);
-            if (this->_socket <= 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Socket syscall failed for address initialization on port " << ntohs(this->_port) << ": " << strerror(errno));
-                throw SocketException();
-            }
+            // this->getSocket() = ::socket(this->_address_family, SOCK_STREAM, 0);
+            // if (this->getSocket() <= 0)
+            // {
+            //     LOG_ERROR(LOG_CATEGORY_NETWORK, "Socket syscall failed for address initialization on port " << ntohs(this->_port) << ": " << strerror(errno));
+            //     throw SocketException();
+            // }
         }
 
 
-        int     getSocket() const { return (this->_socket); }
+        // int     getSocket() const { return (this->getSocket()); }
 #ifdef ENABLE_TLS
         bool    useTLS() const { return (this->_useTLS); }
 #endif
@@ -40,7 +40,7 @@ class ServerEndpoint : public InetAddress
         {
             if (this->_address_family == AF_INET)
             {
-                if (bind(this->_socket, (sockaddr*)(&this->_address_4), sizeof(this->_address_4)) != 0)
+                if (bind(this->getSocket(), (sockaddr*)(&this->_address_4), sizeof(this->_address_4)) != 0)
                 {
                     LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address initialization on port " << this->_port << ": " << strerror(errno));
                     throw BindException();
@@ -48,14 +48,14 @@ class ServerEndpoint : public InetAddress
             }
             else if (this->_address_family == AF_INET6)
             {
-                if (bind(this->_socket, (sockaddr*)(&this->_address_6), sizeof(this->_address_6)) != 0)
+                if (bind(this->getSocket(), (sockaddr*)(&this->_address_6), sizeof(this->_address_6)) != 0)
                 {
                     LOG_ERROR(LOG_CATEGORY_NETWORK, "Bind syscall failed for address on IPv6 initialization on port " << this->_port << ": " << strerror(errno));
                     throw BindException();
                 }
             }
 
-            if (listen(this->_socket, max_pending_connections) != 0)
+            if (listen(this->getSocket(), max_pending_connections) != 0)
             {
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "Listen syscall failed for address initialization on port " << this->_port << ": " << strerror(errno));
                 throw ListenException();
@@ -68,11 +68,11 @@ class ServerEndpoint : public InetAddress
                 LOG_INFO(LOG_CATEGORY_NETWORK, "Started listening on endpoint " << this->getHostname() << " on port " << this->_port)
         }
 
-        class SocketException : public std::logic_error
-        {
-            public:
-                SocketException() : std::logic_error("socket exception occured: abort") {}
-        };
+        // class SocketException : public std::logic_error
+        // {
+        //     public:
+        //         SocketException() : std::logic_error("socket exception occured: abort") {}
+        // };
 
         class BindException : public std::logic_error
         {
@@ -87,7 +87,7 @@ class ServerEndpoint : public InetAddress
         };
 
     private:
-        int             _socket;
+        // int             getSocket();
 
         #ifdef ENABLE_TLS
         bool            _useTLS;

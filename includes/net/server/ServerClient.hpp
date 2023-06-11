@@ -1,12 +1,16 @@
 # pragma once
 
 #include <arpa/inet.h>
+#include <poll.h>
 #include <string>
 
 #ifdef ENABLE_TLS
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #endif
+
+#include "../common/PacketManager.hpp"
+#include "../common/TcpSocket.hpp"
 
 // predefinition for ServerClient
 template<typename H>
@@ -25,17 +29,17 @@ class Server;
 *
 */
 template<typename H, typename D>
-class ServerClient : public D, public PacketManager
+class ServerClient : public D, public PacketManager, public TcpSocket
 {
 #ifdef ENABLE_TLS
     
     public:
         ServerClient(const int socket, const InetAddress& addr_info, SSL* ssl = nullptr) throw(std::logic_error)
-            : D(), PacketManager(addr_info), _socket(socket), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
+            : D(), PacketManager(addr_info), TcpSocket(socket, addr_info.getAddressFamily()), _ssl_connection(ssl), _useTLS(ssl != nullptr), _accept_done(false)
             {} 
 #else
         ServerClient(const int socket, const InetAddress& addr_info) throw(std::logic_error)
-            : D(), PacketManager(addr_info), _socket(socket)
+            : D(), PacketManager(addr_info), TcpSocket(socket, addr_info.getAddressFamily())
             {} 
 #endif
 
@@ -74,12 +78,9 @@ class ServerClient : public D, public PacketManager
 
 #endif
 
-        int     getSocket() const { return this->_socket; }
-
-    private:
-        int         _socket;
 
 #ifdef ENABLE_TLS
+    private:
         SSL         *_ssl_connection;
         const bool  _useTLS;
         bool        _accept_done;

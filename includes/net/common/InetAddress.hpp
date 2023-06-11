@@ -130,7 +130,6 @@ class InetAddress
             if (n_retries == 0 || hostname_buffer[0] == 0)
                 throw std::logic_error(std::string("Unable to retrieve host name: ") + gai_strerror(err) + ": " + std::to_string(err));
 
-            std::cout << "got hostname for IPV4: " <<std::string(hostname_buffer)  << std::endl;
             return (std::string(hostname_buffer));
         }
 

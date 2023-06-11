@@ -37,7 +37,7 @@ SRCS_SERVER		=	main.cpp Tintin_reporter.cpp Config.cpp
 SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
  
 HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp \
-					client.hpp dto_base.hpp packed_data.hpp packet.hpp server.hpp ServerClient.hpp ServerEndpoint.hpp ServerClientsHandler.hpp NetObject.hpp
+					client.hpp dto_base.hpp packed_data.hpp packet.hpp server.hpp ServerClient.hpp ServerEndpoint.hpp ServerClientsHandler.hpp InetAddress.hpp TcpSocket.hpp PollSocketHandler.hpp SelectSocketHandler.hpp
 
 
 CPP_DBG_FLAGS		=	#-g3 -fsanitize=address

@@ -1,6 +1,14 @@
 # include "Taskmaster.hpp"
 # include "cpp_argparse.hpp"
 
+#ifdef __linux__
+# define DISABLE_WARNINGS
+# define USE_SELECT
+//todo # define USE_EPOLL
+#elif defined(__APPLE__)
+# define USE_POLL
+#endif
+
 # define ENABLE_TLS
 # include "net/server.hpp"
 # include "dto.hpp"
@@ -52,7 +60,9 @@ class TaskmasterClientsManager : public ServerClientsHandler<TaskmasterClientsMa
 
 					// resending back packet with different value
 					status->value = 42;
-					server.emit("status_response", *status, client);
+					server.emit_now("status_response", *status, client);
+
+					::close(client.getSocket());
 				}
             ));
         }
@@ -192,6 +202,7 @@ int main(int ac, char** av)
 		do
 		{
 			// do taskmaster things...
+			std::cout << "Server POLL" << std::endl;
 		}
 		while (server->wait_update());
 

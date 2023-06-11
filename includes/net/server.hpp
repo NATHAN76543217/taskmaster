@@ -13,15 +13,24 @@
 #include <map>
 #include <stack>
 #include <list>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
 
-// system select implementation may not implement FD_COPY
-#ifndef FD_COPY
-#define FD_COPY(src, dst) std::memcpy(dst, src, sizeof(*(src)))
+/* SocketsHandler implementation is specified for each handler type */
+#if   defined(USE_SELECT)
+# ifndef DISABLE_WARNINGS
+#  warning "select() Socket Handler is deprecated: use poll/kqueue on BSD plateforms, and epoll for Linux"
+# endif
+# include "common/socket_handlers/SelectSocketHandler.hpp"
+#elif defined(USE_KQUEUE)
+class SocketsHandler {};
+# error "Socket Handler not implemented for kqueue()"
+#elif defined(USE_EPOLL)
+class SocketsHandler {};
+# error "Socket Handler not implemented for epoll()"
+#else // use POLL by default
+# ifndef  USE_POLL
+#  define USE_POLL
+# endif
+# include "common/socket_handlers/PollSocketHandler.hpp"
 #endif
 
 #include "Tintin_reporter.hpp"
@@ -109,8 +118,8 @@ class Server
 #endif
             this->_client_handler.declareMessages();
 
-            FD_ZERO(&this->_read_fds);
-            FD_ZERO(&this->_write_fds);
+            // FD_ZERO(&this->_read_fds);
+            // FD_ZERO(&this->_write_fds);
         }
 
 
@@ -156,7 +165,7 @@ class Server
 #ifdef ENABLE_TLS
             bool enablesTLS = false;
 #endif
-            for (const ServerEndpoint& ep : this->endpoints)
+            for (ServerEndpoint& ep : this->endpoints)
             {
 #ifdef ENABLE_TLS
                 if (ep.useTLS())
@@ -164,7 +173,12 @@ class Server
 #endif
                 ep.start_listening(max_pending_connections);
                 // set endpoint to be selected 
-                FD_SET(ep.getSocket(), &this->_read_fds);
+                this->_sockets_handler.addSocket(ep);
+                // struct pollfd endpoint_pollfd;
+                // endpoint_pollfd.fd = ep.getSocket();
+                // endpoint_pollfd.events = POLL_IN;
+                // this->_pollfds.push_back(endpoint_pollfd);
+                // FD_SET(ep.getSocket(), &this->_read_fds);
             }
 
 #ifdef ENABLE_TLS
@@ -186,54 +200,41 @@ class Server
         {
             if (!running)
                 return (false);
-            // preserve main fd_set's
-            fd_set selected_read_fds = {0};
-            fd_set selected_write_fds = {0};
-            FD_COPY(&this->_read_fds, &selected_read_fds);
-            FD_COPY(&this->_write_fds, &selected_write_fds);
+
+            int received = 0;
             
-            int nfds = this->_get_nfds();
-            struct timeval *timeout_ptr = nullptr;
-            struct timeval timeout = {.tv_sec=timeout_ms / 1000,.tv_usec=(timeout_ms % 1000) * 1000};
-            if (timeout_ms != -1)
-            {
-                timeout_ptr = &timeout;
-            }
-            if (select(nfds, &selected_read_fds, &selected_write_fds, NULL, timeout_ptr) == -1)
+            if (this->_sockets_handler.processPoll(timeout_ms))
             {
                 if (errno == EINTR || errno == ENOMEM)
                     return (true);
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed: " << strerror(errno));
-                return (true);
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "sockets handler failed: " << strerror(errno));
+                return (false);
             }
 
-            // look for clients receive
-            for (typename Server::client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
+            // looking for each handeled events
+            SocketsHandler::socket_event ev = this->_sockets_handler.nextSocketEvent();
+            while (!EV_IS_END(ev))
             {
-                // received from client
-                if (FD_ISSET(it->second.getSocket(), &selected_read_fds))
+                // looking for new connections on endpoints
+                bool is_endpoint = false;
+                for (ServerEndpoint& ep : this->endpoints)
                 {
-                    if (this->_receive(it->second) == false)
-                        break ; // sent disconnect
-                    if (!running)
-                        return (false); 
-                }
-                // writing enabled for client, can send data
-                if (FD_ISSET(it->second.getSocket(), &selected_write_fds))
-                {
-                    this->_send_data(it->second);
-                }
-            }
-
-            for (const ServerEndpoint& ep : this->endpoints)
-            {
-                if (FD_ISSET(ep.getSocket(), &selected_read_fds))
-                {
-#ifdef ENABLE_TLS
+                    if (!EV_IS_SOCKET(ev, ep.getSocket()))
+                        continue ;
+                    if (EV_IS_ERROR(ev))
+                    {
+                        LOG_ERROR(LOG_CATEGORY_NETWORK, "An error occurred on endpoint " << ep.getHostname());
+                        this->_sockets_handler.delSocket(ep);
+                        return true;
+                    }
+                    if (!EV_IS_READABLE(ev))
+                        continue ;
+                    received++;
+    #ifdef ENABLE_TLS
                     if (ep.useTLS())
                         this->_accept_ssl(ep);
                     else 
-#endif
+    #endif
                     if (ep.getAddressFamily() == AF_INET)
                     {
                         this->_accept(ep);
@@ -242,7 +243,43 @@ class Server
                     {
                         this->_accept6(ep);
                     }
+                    is_endpoint = true;
+                    break ;
                 }
+
+                if (is_endpoint)
+                {
+                    ev = this->_sockets_handler.nextSocketEvent();
+                    continue;
+                }
+
+                // looking for clients received data
+                try {
+                    client_type& client = this->_clients.at(ev.socket);
+                
+                    if (EV_IS_ERROR(ev))
+                    {
+                        this->disconnect(client);
+                        break ;
+                    }
+                    if (EV_IS_READABLE(ev))
+                    {
+                        if (this->_receive(client) == false)
+                            break ; // sent disconnect
+                        if (!running)
+                            return (false); 
+                    }
+                    if (EV_IS_WRITABLE(ev))
+                    {
+                        this->_send_data(client);
+                    }
+                } catch (std::out_of_range& e)
+                {
+                    LOG_ERROR(LOG_CATEGORY_NETWORK, "SocketsHandler returned an event with no recipient !!!");
+                    return (true);
+                }
+
+                ev = this->_sockets_handler.nextSocketEvent();
             }
 
             return (running);
@@ -377,12 +414,12 @@ class Server
             }
 #endif
 
+            this->_sockets_handler.delSocket(client);
             if (this->_clients.erase(socket) == 0)
             {
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "trying to disconnect unkown client with socket " << socket << " from address " << address)
                 return false;
             }
-            FD_CLR(socket, &this->_read_fds);
             ::close(socket);
             this->n_clients_connected--;
             LOG_INFO(LOG_CATEGORY_NETWORK, "client from " << address << " disconnected");
@@ -498,6 +535,7 @@ class Server
                     ::close(client_socket);
                     return (-1);
                 }
+
                 std::pair<typename Server::client_list_type::iterator, bool> insertion = this->_clients.insert(std::make_pair(client_socket, client_type(client_socket, addr_info)));
                 if (insertion.second == false)
                 {
@@ -507,7 +545,7 @@ class Server
                 }
 
                 this->n_clients_connected++;
-                FD_SET(client_socket, &this->_read_fds);
+                this->_sockets_handler.addSocket(insertion.first->second);
                 LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on endpoint " << endpoint.getHostname() << " from "  << addr_info.getHostname());
                 this->_client_handler.onConnected((*insertion.first).second);
                 return (client_socket);
@@ -551,7 +589,7 @@ class Server
                 }
 
                 this->n_clients_connected++;
-                FD_SET(client_socket, &this->_read_fds);
+                this->_sockets_handler.addSocket(insertion.first->second);
                 LOG_INFO(LOG_CATEGORY_NETWORK, "New client connected on IPv6 on endpoint " << endpoint.getHostname() << " from "  << addr_info.getHostname());
                 this->_client_handler.onConnected((*insertion.first).second);
                 return (client_socket);
@@ -582,7 +620,7 @@ class Server
                     LOG_INFO(LOG_CATEGORY_NETWORK, "SSL accept incomplete, waiting for more data for handshake...");
                     return (0);
                 }
-                LOG_WARN(LOG_CATEGORY_NETWORK, "SSL accept handshake failed client trying to connect from " << client.getHostname());
+                LOG_WARN(LOG_CATEGORY_NETWORK, "SSL accept handshake failed for client trying to connect from " << client.getHostname());
                 ERR_print_errors_fp(stderr);
                 return (-1);
             }
@@ -610,7 +648,7 @@ class Server
                 {
                     LOG_INFO(LOG_CATEGORY_NETWORK, "Cannot accept more than " << this->max_connections << " connections, refusing new client from "  << addr_info.getHostname());
                     // cannot accept more clients
-                    close (client_socket);
+                    ::close (client_socket);
                     return (-1);
                 }
 
@@ -627,7 +665,7 @@ class Server
                 }
 
                 this->n_clients_connected++;
-                FD_SET(client_socket, &this->_read_fds);
+                this->_sockets_handler.addSocket(insertion.first->second);
                 LOG_INFO(LOG_CATEGORY_NETWORK, "New client was accepted on TLS on endpoint " << endpoint.getHostname() << " from "  << addr_info.getHostname() << ", waiting for SSL handshake...");
                 return (client_socket);
             }
@@ -809,7 +847,7 @@ class Server
 
             std::memcpy(data_buffer, &pack, sizeof(data_buffer));
             client._data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
-            FD_SET(client.getSocket(), &this->_write_fds);   
+            this->_sockets_handler.socketWantsWrite(client, true);
         }
 
 
@@ -822,35 +860,38 @@ class Server
         {
             if (client._data_to_send.empty())
             {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending on client from " << client.getHostname() << " however no data is provider to send.")
-                FD_CLR(client.getSocket(), &this->_write_fds);
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending for client from " << client.getHostname() << " however no data is provider to send.")
+                this->_sockets_handler.socketWantsWrite(client, false);
                 return false;
             }
-            LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to client on client from " << client.getHostname());
+            LOG_INFO(LOG_CATEGORY_NETWORK, "emitting to client from " << client.getHostname());
 #ifdef ENABLE_TLS
             ssize_t sent_bytes;
             if (client._useTLS)
             {
                 if (!client._accept_done)
                 {
-                    LOG_WARN(LOG_CATEGORY_NETWORK, "Attempting to emit on TLS client from " << client.getHostname() << " which is not yet accepted, setting emit for later...");
+                    LOG_WARN(LOG_CATEGORY_NETWORK, "Attempting to emit to TLS client from " << client.getHostname() << " which is not yet accepted, setting emit for later...");
                     return false;
                 }
                 sent_bytes = SSL_write(client._ssl_connection, client._data_to_send.top().c_str(), client._data_to_send.top().size());
             }
             else
-                sent_bytes = send(client._socket, client._data_to_send.top().c_str(), client._data_to_send.top().size(), 0);
+                sent_bytes = send(client.getSocket(), client._data_to_send.top().c_str(), client._data_to_send.top().size(), 0);
 #else
-            ssize_t sent_bytes = send(client._socket, client._data_to_send.top().c_str(), client._data_to_send.top().size(), 0);
+            ssize_t sent_bytes = send(client.getSocket(), client._data_to_send.top().c_str(), client._data_to_send.top().size(), 0);
 #endif
             if (sent_bytes < 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "Send from client from " << client.getHostname() << " failed with error: " << std::strerror(errno))
+                LOG_WARN(LOG_CATEGORY_NETWORK, "Send to client from " << client.getHostname() << " failed with error: " << std::strerror(errno))
+                client._data_to_send.pop();
+                if (client._data_to_send.empty())
+                    this->_sockets_handler.socketWantsWrite(client, false);
                 return false;
             }
             else if (sent_bytes == 0)
             {
-                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data from " << client.getHostname());
+                LOG_WARN(LOG_CATEGORY_NETWORK, "sent 0 bytes of data to client from " << client.getHostname());
                 return false;
             }
             else if ((size_t)sent_bytes != client._data_to_send.top().size())
@@ -859,40 +900,14 @@ class Server
                 std::string left = client._data_to_send.top().substr(sent_bytes, client._data_to_send.top().length());
                 client._data_to_send.pop();
                 client._data_to_send.push(left);   
-                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent from client from " << client.getHostname()<< " was cropped: " << client._data_to_send.top().length() << " bytes left to send");
+                LOG_INFO(LOG_CATEGORY_NETWORK, "Data sent to client from " << client.getHostname()<< " was cropped: " << client._data_to_send.top().length() << " bytes left to send");
                 return false;
             }
             // sent full packet.
             client._data_to_send.pop();
-            FD_CLR(client.getSocket(), &this->_write_fds);
+            if (client._data_to_send.empty())
+                this->_sockets_handler.socketWantsWrite(client, false);
             return (true);
-        }
-
-
-        /* ================================================ */
-        /* Private utils                                    */
-        /* ================================================ */
-
-#define _MAX(a, b) ((a > b) ? a : b)
-        int     _get_nfds()
-        {
-            static int nfds = 0;
-            static int n_clients = -1;
-
-            // recalculate nfds only when a new client is connected
-            if (this->n_clients_connected != n_clients)
-            {
-                n_clients = this->n_clients_connected;
-                for (const ServerEndpoint &ep : this->endpoints)
-                {
-                    nfds = _MAX(nfds, ep.getSocket());
-                }
-                for (typename Server::client_list_type::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
-                {
-                    nfds = _MAX(nfds, it->second.getSocket());
-                }
-            }
-            return (nfds + 1); 
         }
 
 
@@ -920,7 +935,7 @@ class Server
     /* ================================================ */
 
     public:
-        const endpoint_list_type    endpoints;
+        endpoint_list_type  endpoints;
 
 #ifdef ENABLE_TLS
         std::string ssl_cert_file;
@@ -938,10 +953,9 @@ class Server
 
     private:
 
-        handler_type    _client_handler;
+        handler_type        _client_handler;
 
-        fd_set          _read_fds;
-        fd_set          _write_fds;
+        SocketsHandler      _sockets_handler;
 
 #ifdef ENABLE_TLS
         SSL_CTX*            _ssl_ctx;

@@ -1,6 +1,15 @@
 #include <iostream>
 #include "cpp_argparse.hpp"
 
+
+#ifdef __linux__
+# define DISABLE_WARNINGS
+# define USE_SELECT
+//todo # define USE_EPOLL
+#elif defined(__APPLE__)
+# define USE_POLL
+#endif
+
 # define ENABLE_TLS
 #include "net/client.hpp"
 #include "dto.hpp"

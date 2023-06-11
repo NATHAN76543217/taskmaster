@@ -23,6 +23,28 @@
 #define FD_COPY(src, dst) std::memcpy(dst, src, sizeof(*(src)))
 #endif
 
+
+
+/* SocketsHandler implementation is specified for each handler type */
+#if   defined(USE_SELECT)
+# ifndef DISABLE_WARNINGS
+#  warning "select() Socket Handler is deprecated: use poll/kqueue on BSD plateforms, and epoll for Linux"
+# endif
+# include "common/socket_handlers/SelectSocketHandler.hpp"
+#elif defined(USE_KQUEUE)
+class SocketsHandler {};
+# error "Socket Handler not implemented for kqueue()"
+#elif defined(USE_EPOLL)
+class SocketsHandler {};
+# error "Socket Handler not implemented for epoll()"
+#else // use POLL by default
+# ifndef  USE_POLL
+#  define USE_POLL
+# endif
+# include "common/socket_handlers/PollSocketHandler.hpp"
+#endif
+
+#include "common/TcpSocket.hpp"
 #include "common/PacketManager.hpp"
 #include "common/dto_base.hpp"
 #include "client/ClientHandler.hpp"
@@ -61,7 +83,7 @@ class DefaultClientHandler : ClientHandler<DefaultClientHandler, DefaultClientDa
 
 
 template<typename H>
-class Client : public H::client_data_type, public PacketManager
+class Client : public H::client_data_type, public PacketManager, public TcpSocket
 {
     public:
         typedef Client                          client_type;
@@ -78,8 +100,8 @@ class Client : public H::client_data_type, public PacketManager
         Client(const std::string& server_ip, const short server_port) throw (std::logic_error)
         : data_type(),
           PacketManager(server_ip, server_port, AF_INET),
+          TcpSocket(this->getAddressFamily()),
           connected(false),
-          _socket(-1),
 #ifdef ENABLE_TLS
           _useTLS(false),
           _ssl_method(TLS_client_method()),
@@ -88,9 +110,6 @@ class Client : public H::client_data_type, public PacketManager
           _handler(*this)
         {            
             this->_handler.declareMessages();
-
-            FD_ZERO(&this->_read_fd);
-            FD_ZERO(&this->_send_fd);
         }
 
 #ifdef ENABLE_TLS
@@ -121,26 +140,22 @@ class Client : public H::client_data_type, public PacketManager
         /* connect, a ConnectException is thrown.                             */
         void    connect()
         {
-            this->_socket = socket(AF_INET, SOCK_STREAM, 0);
-            if (this->_socket <= 0)
-                throw SocketException();
-
-            if (::connect(this->_socket, reinterpret_cast<sockaddr*>(&this->_address_4), sizeof(this->_address_4)) != 0)
+            if (::connect(this->getSocket(), reinterpret_cast<sockaddr*>(&this->_address_4), sizeof(this->_address_4)) != 0)
             {
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "Can't connect to server: " << std::strerror(errno));
                 throw ConnectException();
             }
-            FD_SET(this->_socket, &this->_read_fd);
+            this->_socket_handler.addSocket(*this);
             this->connected = true;
 #ifdef ENABLE_TLS
             if (this->_useTLS)
             {
                 // set socket for writing to send ssl handshake
-                FD_SET(this->_socket, &this->_send_fd);
-                
+                this->_socket_handler.socketWantsWrite(*this, true);
+
                 // create a new SSL connection instance
                 this->_ssl_connection = SSL_new(this->_ssl_ctx);
-                SSL_set_fd(this->_ssl_connection, this->_socket);
+                SSL_set_fd(this->_ssl_connection, this->getSocket());
                 SSL_set_connect_state(this->_ssl_connection);
             }
             else
@@ -161,42 +176,33 @@ class Client : public H::client_data_type, public PacketManager
         /* If specified, a timeout argument can be set to define the timeout in ms for select         */
         bool    wait_update(const int timeout_ms = -1)
         {
-            // preserve fd sets 
-            fd_set read_set;
-            fd_set write_set;
-            FD_ZERO(&write_set);
-            FD_ZERO(&read_set);
-            FD_COPY(&this->_read_fd, &read_set);
-            FD_COPY(&this->_send_fd, &write_set);
-
-            int nfds = this->_socket + 1;
-            struct timeval *timeout_ptr = nullptr;
-            struct timeval timeout = {.tv_sec=timeout_ms / 1000,.tv_usec=(timeout_ms % 1000) * 1000};
-            if (timeout_ms != -1)
+            if (this->_socket_handler.processPoll(timeout_ms))
             {
-                timeout_ptr = &timeout;
-            }
-            if (select(nfds, &read_set, &write_set, 0, timeout_ptr) < 0)
-            {
-                LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed with error: " << std::strerror(errno));
+                LOG_ERROR(LOG_CATEGORY_NETWORK, "Sockets handler failed with error: " << std::strerror(errno));
                 return (true);
             }
 
-            // data pending to be read
-            if (FD_ISSET(this->_socket, &read_set))
+            SocketsHandler::socket_event ev = this->_socket_handler.nextSocketEvent();
+            while (!EV_IS_END(ev))
             {
-                if (_receive() != true)
+                if (EV_IS_SOCKET(ev, this->getSocket()))
                 {
-                    return (false); // disconnected from server
+                    if (EV_IS_ERROR(ev))
+                    {
+                        this->disconnect();
+                    }
+                    if (EV_IS_READABLE(ev))
+                    {
+                        if (_receive() != true)
+                            return (false); // disconnected from server
+                    }
+                    if (EV_IS_WRITABLE(ev))
+                    {
+                        this->_send_data();
+                    }
+                    break ;
                 }
             }
-
-            // socket able to emit data
-            if (FD_ISSET(this->_socket, &write_set))
-            {
-                this->_send_data();
-            }
-
             return (this->connected);
         }
 
@@ -291,12 +297,13 @@ class Client : public H::client_data_type, public PacketManager
         /* Disconnects the client from the server */
         void    disconnect()
         {
-            ::close(this->_socket);
 #ifdef ENABLE_TLS
             if (this->_ssl_connection != nullptr)
                 SSL_free(this->_ssl_connection);
 #endif
-            this->_socket = -1;
+            this->_socket_handler.delSocket(*this);
+            this->close();
+
             this->connected = false;
             this->_handler.onDisconnected();
             LOG_WARN(LOG_CATEGORY_NETWORK, "Disconnected from server.");
@@ -356,7 +363,8 @@ class Client : public H::client_data_type, public PacketManager
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "Error on ssl handshake, aborting.");
                 return (-1);
             }
-            FD_CLR(this->_socket, &this->_send_fd);
+            // FD_CLR(this->getSocket(), &this->_send_fd);
+            this->_socket_handler.socketWantsWrite(*this, false);
             this->_handshake_done = true;
             this->_handler.onConnected();
             LOG_INFO(LOG_CATEGORY_NETWORK, "Client upgraded connection to TLS successfully");
@@ -375,7 +383,7 @@ class Client : public H::client_data_type, public PacketManager
                 size = SSL_read(this->_ssl_connection, buffer, RECV_BLK_SIZE);
             else
 #endif
-                size = recv(this->_socket, buffer, RECV_BLK_SIZE, MSG_DONTWAIT);
+                size = recv(this->getSocket(), buffer, RECV_BLK_SIZE, MSG_DONTWAIT);
             if (size == 0)
             {
                 this->disconnect();
@@ -470,7 +478,7 @@ class Client : public H::client_data_type, public PacketManager
             // handeled packet needs to be cleared
             this->_cancelPacket();
 
-            return (this->_socket != -1);
+            return (this->getSocket() != -1);
         }
 
 
@@ -483,7 +491,8 @@ class Client : public H::client_data_type, public PacketManager
 
             std::memcpy(data_buffer, &pack, sizeof(data_buffer));
             this->_data_to_send.push(std::string(data_buffer, sizeof(data_buffer)));
-            FD_SET(this->_socket, &this->_send_fd);
+            // FD_SET(this->getSocket(), &this->_send_fd);
+            this->_socket_handler.socketWantsWrite(*this, true);
         }
 
 
@@ -502,7 +511,7 @@ class Client : public H::client_data_type, public PacketManager
             if (this->_data_to_send.empty())
             {
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "fd_set was set for sending however no data is provider to send.");
-                FD_CLR(this->_socket, &this->_send_fd);
+                this->_socket_handler.socketWantsWrite(*this, false);
                 return (false);
             }
 
@@ -513,7 +522,7 @@ class Client : public H::client_data_type, public PacketManager
                 sent_bytes = SSL_write(this->_ssl_connection, this->_data_to_send.top().c_str(), this->_data_to_send.top().size());
             else
 #endif
-                sent_bytes = send(this->_socket, this->_data_to_send.top().c_str(), this->_data_to_send.top().size(), 0);
+                sent_bytes = send(this->getSocket(), this->_data_to_send.top().c_str(), this->_data_to_send.top().size(), 0);
             
             if (sent_bytes < 0)
             {
@@ -535,7 +544,8 @@ class Client : public H::client_data_type, public PacketManager
             }
             // sent full packet.
             this->_data_to_send.pop();
-            FD_CLR(this->_socket, &this->_send_fd);
+            if (this->_data_to_send.empty())
+                this->_socket_handler.socketWantsWrite(*this, false);
             return (true);
         }
 
@@ -574,12 +584,13 @@ class Client : public H::client_data_type, public PacketManager
         bool        connected;
 
     private:
-        int         _socket;
+        //int         _socket;
 
-        fd_set      _read_fd;
-        fd_set      _send_fd;
+        // fd_set      _read_fd;
+        // fd_set      _send_fd;
+        SocketsHandler  _socket_handler;
 
-        sockaddr_in _client_address;
+        sockaddr_in     _client_address;
 
         msg_list_type   _messages_handlers;
 
