@@ -33,10 +33,10 @@ LOG_DIR		= logs
 # - fill only with name of the file
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
-SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Config.cpp Job.cpp
+SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Config.cpp JobManager.cpp Job.cpp
 SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
  
-HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp Job.hpp tm_values.hpp \
+HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp JobManager.hpp Job.hpp tm_values.hpp \
 					client.hpp dto_base.hpp packed_data.hpp packet.hpp server.hpp
 
 
@@ -84,7 +84,8 @@ client: display_os init_lib check_headers check_sources $(NAME_CLIENT)
 	@ echo "$(PREFIX_INFO) All done for client"
 
 # Initializes libraries for both client and server here
-init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB) $(FTXUI_LIB)
+init_lib: $(LIB_DIR) $(YAML_LIB) $(ARGPARSE_LIB) 
+# $(FTXUI_LIB)
 
 
 # include display_os
@@ -138,14 +139,14 @@ $(LIB_DIR):
 
 $(YAML_LIB): 
 	@ echo "$(PREFIX_INFO) Installation de la lib YAML..."
-	@ wget -q https://github.com/jbeder/yaml-cpp/archive/refs/tags/yaml-cpp-$(YAML_LIB_VERSION).tar.gz -O $(LIB_DIR)/yaml.gz
-	@ cd $(LIB_DIR) \
+# @ wget -q https://github.com/jbeder/yaml-cpp/archive/refs/tags/yaml-cpp-$(YAML_LIB_VERSION).tar.gz -O $(LIB_DIR)/yaml.gz
+# @ cd $(LIB_DIR) \
 		&& tar -xf yaml.gz \
 		&& mv yaml-cpp-yaml-cpp-$(YAML_LIB_VERSION) yaml
 	@ cd $(YAML_LIB_PATH) \
 		&& mkdir -p build \
 		&& cd build \
-		&& cmake .. \
+		&& cmake -DYAML_CPP_BUILD_TESTS=OFF .. \
 		&& make
 # && make install
 	@ rm -rf $(LIB_DIR)/yaml.gz

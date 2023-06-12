@@ -27,6 +27,7 @@ programs:
         stopsignal: SIGINT
         stdout: /tmp/nginx.stdout
         stderr: /tmp/nginx.stderr
+        envfromparent: true
         env:
             STARTED_BY: taskmaster
             ANSWER: 42

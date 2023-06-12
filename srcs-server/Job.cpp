@@ -5,10 +5,13 @@
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 Job::Job(): 
-_name(""), 
+_shouldUpdate(false),
+_status(JOB_STATUS_NOTSTARTED),
+_pid(),
+_name(""),
 _cmd(""),
 _nbprocs(TM_DEF_NBPROCS),
-_workingdir(""),
+_workingdir(TM_DEF_WORKDIR),
 _autostart(TM_DEF_AUTOSTART),
 _restartpolicy(TM_DEF_RESTARTPOLICY),
 _nbretrymax(TM_DEF_NBRETRYMAX),
@@ -18,11 +21,15 @@ _stoptime(TM_DEF_STOPTIME),
 _stopsignal(TM_DEF_STOPSIGNAL),
 _stdout(TM_DEF_STDOUT),
 _stderr(TM_DEF_STDERR),
+_envfromparent(TM_DEF_ENVFROMPARENT),
 _env()
 {
 }
 
 Job::Job( const Job & src ) : 
+_shouldUpdate(src._shouldUpdate),
+_status(src._status),
+_pid(src._pid),
 _name(src._name), 
 _cmd(src._cmd),
 _nbprocs(src._nbprocs),
@@ -36,6 +43,7 @@ _stoptime(src._stoptime),
 _stopsignal(src._stopsignal),
 _stdout(src._stdout),
 _stderr(src._stderr),
+_envfromparent(src._envfromparent),
 _env(src._env)
 {
 }
@@ -59,6 +67,9 @@ Job &				Job::operator=( Job const & rhs )
 	if ( this == &rhs )
 		return *this;
 	
+	this->_shouldUpdate = rhs._shouldUpdate;
+	this->_status = rhs._status;
+	this->_pid = rhs._pid;
 	this->_name = rhs._name;
 	this->_cmd = rhs._cmd;
 	this->_nbprocs = rhs._nbprocs;
@@ -72,6 +83,7 @@ Job &				Job::operator=( Job const & rhs )
 	this->_stopsignal = rhs._stopsignal;
 	this->_stdout = rhs._stdout;
 	this->_stderr = rhs._stderr;
+	this->_envfromparent = rhs._envfromparent;
 	this->_env = rhs._env;
 	return *this;
 }
@@ -79,6 +91,9 @@ Job &				Job::operator=( Job const & rhs )
 std::ostream &			operator<<( std::ostream & o, Job const & i )
 {
 	o << "Job config:" << std::endl;
+	o << " - shouldUpdate : " << i.getName() << std::endl;
+	o << " - status : " << i.getName() << std::endl;
+	o << " - pid : " << i.getName() << std::endl;
 	o << " - name : " << i.getName() << std::endl;
 	o << " - cmd : " << i.getCmd() << std::endl;
 	o << " - nbprocs : " << i.getNbProcs() << std::endl;
@@ -103,6 +118,7 @@ std::ostream &			operator<<( std::ostream & o, Job const & i )
 	o << " - stopsignal : " << i.getStopSignal() << std::endl;
 	o << " - stdout : " << i.getStdout() << std::endl;
 	o << " - stderr : " << i.getStderr() << std::endl;
+	o << " - envfromparent : " << i.getEnvfromparent() << std::endl;
 	o << " - env : " << std::endl;
 	for (std::map<std::string, std::string>::const_iterator env = i.getEnv().begin(); env != i.getEnv().end(); env++)
 	{
@@ -115,10 +131,115 @@ std::ostream &			operator<<( std::ostream & o, Job const & i )
 /*
 ** --------------------------------- METHODS ----------------------------------
 */
+
+int				Job::spawnProcess( void )
+{
+	int pid = fork();
+	if (pid < 0)
+	{
+		LOG_ERROR(LOG_CATEGORY_JOB,  "[" << this->_name << "] Failed to `fork()` : " << strerror(errno))
+		return EXIT_FAILURE;
+	}
+	else if (pid == 0)
+	{
+		//child
+		// REVIEWTake mutex
+		/* Set umask */
+		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] umask: " << umask(this->getUmask()) << " -> " << this->getUmask()) 
+	
+		/* Set cwd */
+		if (!this->_workingdir.empty())
+		{
+			if (chdir(this->getWorkingdir().c_str()) == -1)
+			{
+				LOG_ERROR(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Failed to change working direcotry : " << strerror(errno))
+			}
+		}
+		std::vector<std::vector<char>> env_vector = this->splitQuotes(this->_cmd);
+
+		if (this->_envfromparent == true)
+		{
+			uint i = 0;
+			uint y = 0;
+			const char** env_parent = Taskmaster::GetInstance()->getEnv();
+			std::vector<char> tmpvector;
+			while (env_parent[i] != NULL)
+			{
+				y = 0;
+				while(env_parent[i][y] != '\0')
+				{
+					tmpvector.push_back(env_parent[i][y]);
+					y++;
+				}
+				env_vector.push_back(tmpvector);
+				tmpvector.clear();
+				i++;
+			}
+		}
+	
+	
+		std::vector<char *>		env_array = std::vector<char*>();
+		for (std::vector<char>& v : env_vector)
+		{
+			env_array.push_back(v.data());
+		}
+	
+		std::vector<std::vector<char>> arg_vector = this->splitQuotes(this->_cmd);
+	
+		std::vector<char *>		arg_array = std::vector<char*>();
+		for (std::vector<char>& v : arg_vector)
+		{
+			arg_array.push_back(v.data());
+		}
+		/* Launch command */
+		if (execve(arg_array[0], arg_array.data() ,env_array.data()) == -1)
+		{
+			LOG_ERROR(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Failed to `execve` : " << strerror(errno))
+		}
+		exit(EXIT_FAILURE);
+	}
+	else
+	{
+		//Parent
+		this->_pid.push_back(pid);
+		LOG_INFO(LOG_CATEGORY_JOB, "[" << this->_name << "] Process '" << pid << "' started.")
+	}
+	return EXIT_SUCCESS;
+}
+
+
+
+int				Job::start( void )
+{
+	uint i = 0;
+	
+	LOG_DEBUG(LOG_CATEGORY_JOB,  "[" << this->_name << "] start.")
+	this->_status = JOB_STATUS_STARTING;
+	//REVIEW make a for loop
+	while (i < this->_nbprocs )
+	{
+		if (this->spawnProcess() == EXIT_FAILURE)
+		{
+			this->_status = JOB_STATUS_INCOMPLETE;
+		}
+		i++;
+	}
+	/* Check if everything is running smoothly */
+	if (this->_status == JOB_STATUS_STARTING)
+	{
+		this->_status = JOB_STATUS_RUNNING;
+		LOG_INFO(LOG_CATEGORY_JOB,  "[" << this->_name << "] started successfuly.")
+	}
+	else
+		LOG_WARN(LOG_CATEGORY_JOB,  "[" << this->_name << "] start incompletly.")
+	return EXIT_SUCCESS;
+}
+
 //TODO set default value here and call this function in constructor? 
 void			Job::resetDefault( void )
 {
-	this->_name = ""; 
+	this->_name = "";
+	this->_status = JOB_STATUS_NOTSTARTED; 
 	this->_cmd = "";
 	this->_nbprocs = TM_DEF_NBPROCS;
 	this->_workingdir = "";
@@ -137,6 +258,13 @@ void			Job::resetDefault( void )
 /*
 ** --------------------------------- CHECKERS ---------------------------------
 */
+
+void			Job::setStatus( uint status )
+{
+	if (status >= JOB_STATUS_RUNNING)
+		return ;
+	this->_status = status;
+}
 
 void			Job::setName( const std::string &name)
 {
@@ -175,7 +303,7 @@ void			Job::setAutostart(const bool autostart)
 	this->_autostart = autostart;
 }
 
-void			Job::setRestartPolicy(const policy policy)
+void			Job::setRestartPolicy(const job_policy policy)
 {
 	this->_restartpolicy = policy;
 }
@@ -220,6 +348,11 @@ void			Job::setStderr( const std::string &stderr_value)
 	this->_stderr = stderr_value;
 }
 
+void			Job::setEnvfromparent( const bool pass)
+{
+	this->_envfromparent = pass;
+}
+
 void			Job::addEnv(const std::string & key, const std::string & value)
 {
 	this->_env[key] = value;
@@ -228,6 +361,12 @@ void			Job::addEnv(const std::string & key, const std::string & value)
 /*
 ** --------------------------------- GETTERS ---------------------------------
 */
+
+uint				Job::getStatus( void ) const
+{
+	return this->_status;
+}
+
 
 const std::string&		Job::getName( void ) const
 {
@@ -259,7 +398,7 @@ bool					Job::getAutostart( void ) const
 	return this->_autostart;
 }
 
-policy					Job::getRestartPolicy( void ) const
+job_policy					Job::getRestartPolicy( void ) const
 {
 	return this->_restartpolicy;
 }
@@ -326,9 +465,56 @@ const std::string&			Job::getStderr( void ) const
 	return this->_stderr;
 }
 
+bool						Job::getEnvfromparent( void ) const
+{
+	return this->_envfromparent;
+}
+
 const std::map<std::string, std::string>&	Job::getEnv( void ) const
 {
 	return this->_env;
+}
+
+std::vector< std::vector<char> >    Job::splitQuotes(const std::string &str) const
+{
+    std::vector<std::vector<char> > strlist =  std::vector<std::vector<char> >();
+
+    char quote = -1;
+    char escape = -1;
+    
+    strlist.push_back(std::vector<char>());
+    
+    for (const char& c : str)
+    {
+        if ((c == ' ' || c == '\t') && quote == -1)
+        {
+            if (!strlist.rbegin()->empty())
+            {
+                strlist.rbegin()->push_back(0);
+                strlist.push_back(std::vector<char>());
+            }
+        }
+        else if ((c == '\"' || c == '\'') && (quote == -1 || quote == c) && escape != '\\')
+        {
+            if (quote == c)
+                quote = -1;
+            else if (quote == -1)
+                quote = c;
+        }
+        else if (c != '\\' || escape == '\\')
+        {
+            strlist.rbegin()->push_back(c);
+            escape = -1;
+        }
+        else
+            escape = c;
+    }
+    if (quote != -1)
+        throw std::logic_error("Unterminated quote string (no matching ending quote for `" + std::string(&quote, 1) + "`)");
+
+    if (!strlist.rbegin()->empty()) 
+        strlist.push_back(std::vector<char>());
+    return (strlist);
 }
 
 /* ************************************************************************** */

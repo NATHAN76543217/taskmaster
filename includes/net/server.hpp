@@ -6,6 +6,8 @@
 #include <map>
 #include <stack>
 #include <unistd.h>
+#include <cstring>
+#include <cstdlib>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -219,7 +221,8 @@ class Server
             if (select(nfds, &selected_read_fds, &selected_write_fds, NULL, timeout_ptr) == -1)
             {
                 LOG_ERROR(LOG_CATEGORY_NETWORK, "Select failed: " << strerror(errno));
-                throw SelectException();
+                // throw SelectException();
+				return false;
             }
 
             // look for clients receive

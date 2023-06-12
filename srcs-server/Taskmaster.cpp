@@ -1,5 +1,22 @@
 # include "Taskmaster.hpp"
 
+/**
+ * Static methods should be defined outside the class.
+ */
+Taskmaster* Taskmaster::taskmaster_= nullptr;
+
+Taskmaster *Taskmaster::GetInstance()
+{
+    /**
+     * This is a safer way to create an instance. instance = new Singleton is
+     * dangeruous in case two instance threads wants to access at the same time
+     */
+    if(taskmaster_==nullptr){
+        taskmaster_ = new Taskmaster();
+    }
+    return taskmaster_;
+}
+
 /*
 	INIT
 */
@@ -11,6 +28,7 @@ bool		Taskmaster::isRunningRootPermissions( void ) const
 		return false;
 	return true;	
 }
+
 
 // void		Taskmaster::initCategories( void ) const
 // {
@@ -26,6 +44,7 @@ bool		Taskmaster::isRunningRootPermissions( void ) const
 // 	exit(0);
 // }
 
+//TODO rename in init logger
 void		Taskmaster::initCategories( void ) const
 {
 	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
@@ -35,7 +54,9 @@ void		Taskmaster::initCategories( void ) const
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JOB, LOG_STDOUT_MAGIC);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JOB);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JM);
+	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_THREAD, "./thread.log");
 }
 
 
@@ -313,6 +334,15 @@ int			Taskmaster::_parseConfigServer( void )
 	return EXIT_SUCCESS;
 }
 
+const char**		Taskmaster::getEnv( void ) const
+{
+	return this->_parentEnv.load();
+}
+
+void		Taskmaster::setEnv( const char ** env)
+{
+	this->_parentEnv.store(env);
+}
 
 int			Taskmaster::loadConfigFile(const std::string & path)
 {
@@ -351,6 +381,19 @@ int			Taskmaster::reloadConfigFile( void )
 	return EXIT_SUCCESS;
 }
 
+int			Taskmaster::startJobManager( void )
+{
+	this->_jobManager = JobManager::GetInstance();
+	return EXIT_SUCCESS;
+}
+
+void		Taskmaster::stopJobManager( void )
+{
+	JobManager::GetInstance()->stop( true);
+	JobManager::DestroyInstance();
+	this->_jobManager = nullptr;
+}
+
 
 /*
 	LOCK FILE
@@ -384,24 +427,19 @@ void		Taskmaster::freeLockFile( void ) const
 	UTILS
 */
 
-/**
- * Static methods should be defined outside the class.
- */
-Taskmaster* Taskmaster::taskmaster_= nullptr;
-
-Taskmaster *Taskmaster::GetInstance()
-{
-    /**
-     * This is a safer way to create an instance. instance = new Singleton is
-     * dangeruous in case two instance threads wants to access at the same time
-     */
-    if(taskmaster_==nullptr){
-        taskmaster_ = new Taskmaster();
-    }
-    return taskmaster_;
-}
 
 pid_t			Taskmaster::getpid( void ) const
 {
 	return this->_pid;
 }
+
+void			Taskmaster::stop( bool stop )
+{
+	this->_shouldStop = stop;
+}
+
+bool			Taskmaster::shouldStop( void ) const
+{
+	return this->_shouldStop;
+}
+

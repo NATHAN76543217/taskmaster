@@ -23,8 +23,8 @@ ARGPARSE_LIB 		= $(LIB_DIR)/argparse
 CPP_INC_FLAGS		+=	-I $(ARGPARSE_LIB)
 
 #lib yaml
-FTXUI_LIB_PATH 		= $(LIB_DIR)/ftxui
-FTXUI_LIB			= $(FTXUI_LIB_PATH)/build/libyaml-cpp.a
-FTXUI_LIB_VERSION	=	0.7.0
-CPP_INC_FLAGS		+=	-I $(FTXUI_LIB_PATH)/include
-CPP_LNK_FLAGS		+=	-L $(FTXUI_LIB_PATH)/build -lyaml-cpp 
+# FTXUI_LIB_PATH 		= $(LIB_DIR)/ftxui
+# FTXUI_LIB			= $(FTXUI_LIB_PATH)/build/libyaml-cpp.a
+# FTXUI_LIB_VERSION	=	0.7.0
+# CPP_INC_FLAGS		+=	-I $(FTXUI_LIB_PATH)/include
+# CPP_LNK_FLAGS		+=	-L $(FTXUI_LIB_PATH)/build -lyaml-cpp 
