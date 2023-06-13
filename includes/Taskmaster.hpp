@@ -20,9 +20,10 @@
 class Taskmaster
 {
 	private:
-		pid_t		_pid;
-		Config		_config;
-		JobManager* _jobManager;
+		struct sigaction	_sig_tm;
+		pid_t				_pid;
+		Config				_config;
+		JobManager*			_jobManager;
 
 		/* Config values */
 		std::string		_lockpath;
@@ -84,11 +85,14 @@ class Taskmaster
 		 * executed on its instance.
 		 */
 
+		/* Init */
+		bool		isRunningRootPermissions( void ) const;
+		int			initSignalsTm( void );
+		static void		signalHandler( int signal );
 		void		initCategories( void ) const;
 		pid_t		getpid( void ) const;
 		void		takeLockFile( void ) const;
 		void		freeLockFile( void ) const;
-		bool		isRunningRootPermissions( void ) const;
 		int			loadConfigFile(const std::string & path);
 		const char** getEnv( void ) const;
 		void		setEnv( const char **env);

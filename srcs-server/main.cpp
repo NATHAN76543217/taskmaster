@@ -24,6 +24,8 @@
 //TODO add config key envfromparent
 //TODO avoid duplicate in job names
 //TODO when change job._nbprocs (setnbprocs) just spawn od unspawn the right number of processes without touching the good ones
+//TODO add struct job_worker that contain the pid and status of child processes
+
 class ClientData
 {
 	public:
@@ -58,90 +60,12 @@ class TaskmasterClientsHandler : public ServerClientHandler<TaskmasterClientsHan
 };
 
 
-
-
-void	signal_handler(int signal)
-{
-
-	LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Signal °" + ntos(signal) + " catched.")
-	if (signal == SIGHUP)
-	{
-		LOG_WARN(LOG_CATEGORY_CONFIG, "SIGHUP received: Reload config")
-		//TODO protect race contidiotn 
-		Taskmaster::GetInstance()->reloadConfigFile();
-	}
-	else if (signal == SIGINT)
-	{
-		LOG_WARN(LOG_CATEGORY_INIT, "SIGINT received: Prepare stopping...")
-		Taskmaster::GetInstance()->stop(true);
-	}	
-	else if (signal == SIGCHLD)
-	{
-		LOG_WARN(LOG_CATEGORY_JM, "SIGCHLD received: a child process as exited.")
-		int stat = 0;
-		pid_t child_pid = 0;
-		if ((child_pid = waitpid(0, &stat, 0)) == -1)
-		{
-			LOG_ERROR(LOG_CATEGORY_JM, "Failed to `waitpid` : " << strerror(errno))
-			return ;
-		}
-		if (WIFEXITED(stat) || WIFSIGNALED(stat))
-		{
-			if (WIFEXITED(stat))
-			{
-				LOG_INFO(LOG_CATEGORY_JM, "Process [" << child_pid << "] exit with status '" << WEXITSTATUS(stat) << "'.")
-			}
-			else
-			{
-				LOG_INFO(LOG_CATEGORY_JM, "Process [" << child_pid << "] exit with signal '" << WTERMSIG(stat) << "'.")
-			}
-			//TODO implement JobManager::getJobByPid(), JobManager::jobEnd() qui retournent tout deux un iterateur
-			//get the job, remove from his list the terminated pid, store the status as exit or signaled, success or error
-
-		}
-		else
-		{
-			LOG_CRITICAL(LOG_CATEGORY_JM, "Process [" << child_pid << "] marked as 'not exited' and not 'signaled' but waitpid is set on 'NOHANG'.")
-			return ;
-		}
-	}
-	
-}
-
-
-int	init_signals(struct sigaction *sa)
-{
-
-	memset(sa, 0, sizeof(struct sigaction));
-	// sa.sa_sigaction = signal_handler;
-	sigemptyset(&sa->sa_mask);
-	sa->sa_handler = signal_handler;
-	sa->sa_flags = 0; 
-	// sa->sa_flags = SA_SIGINFO; 
-	// sigaddset(&sa.sa_mask, SIGINT);
-	// sigprocmask(&sa.sa_mask);
-	sigaction(SIGINT, sa, NULL);
-	sigaction(SIGHUP, sa, NULL);
-	sigaction(SIGCHLD, sa, NULL);
-	// if (signal(SIGQUIT, signal_handler) == SIG_ERR)
-		// return EXIT_FAILURE;
-	// if (signal(SIGINT, signal_handler) == SIG_ERR)
-		// return EXIT_FAILURE;
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "Signal handlers successfuly started")
-	
-	return EXIT_SUCCESS;
-}
-
-
-
-
 int main(int ac, char** av, const char** env)
 {
 	bool		help = false;
 
 	std::string	serverIp;
 	int			serverPort;
-	struct sigaction sa;
 	Taskmaster *TM = nullptr;
 
 	ARG_INIT(
@@ -190,7 +114,7 @@ int main(int ac, char** av, const char** env)
 
 	LOG_INFO(LOG_CATEGORY_INIT, "PID: " + ntos(TM->getpid()))
 
-	if (init_signals(&sa) != EXIT_SUCCESS)
+	if (TM->initSignalsTm() != EXIT_SUCCESS)
 	{
 		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to init signal handlers.")
 		return EXIT_FAILURE;

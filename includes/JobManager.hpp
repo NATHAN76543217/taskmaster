@@ -3,8 +3,11 @@
 
 # include <iostream>
 # include <string>
+# include <chrono>
 # include <atomic>
+# include <mutex>
 # include <thread>
+# include <condition_variable>
 
 class JobManager;
 
@@ -16,23 +19,40 @@ class JobManager
 {
 	/* Private variables */
 	private:
-		std::thread		_threadJM;
-		bool			_shouldStop;
-		std::list<Job>	_runningjobs;
+		struct sigaction			_sig_tm;
+		std::thread					_threadJM;
+		bool						_shouldStop;
+		std::list<Job>				_runningjobs;
+		std::mutex					_mutexChildlist;
+		std::vector<pid_t>			_changedChilds;
+		std::mutex					_mutex;
+		std::condition_variable		_hasUpdate;
+		// bool						_somethingChanged;
+		bool						_childChanged;//TODO remove this variable
+		bool						_configChanged;
 
 	protected:
 	/* Constructor */ 
-		JobManager() : _threadJM(std::thread(std::ref(*this))), _shouldStop(false) {
+	//TODO init all variables
+		JobManager() : 
+			_threadJM(std::thread(std::ref(*this))),
+			_shouldStop(false),
+			_hasUpdate(),
+			// _somethingChanged(false),
+			_childChanged(false),
+			_configChanged(false)
+		{
 
 		};
 
 	/* Destructor */ 
 		~JobManager() {
-
 		};
 
 	/* unique instance */ 
 		static std::atomic<JobManager*>	jobManager_;
+	
+		int		_updateConfig( void );
 
 	public:
 	/* Singletons should not be cloneable. */
@@ -49,8 +69,12 @@ class JobManager
 		static void			DestroyInstance( void );
 	/* JobManager methods */
 
-	void		stop( bool stop );
-	int			startThreadJM( void );
+	void			setConfigChanged( void );
+	int				initSignalsJm( void );
+	static void		signalHandler( int signal );
+	void			stop( bool stop );
+	void			notifyChildDeath( pid_t pid, int stat);
+	// int			startThreadJM( void );
 	int			stopThreadJM( void );
 };
 
