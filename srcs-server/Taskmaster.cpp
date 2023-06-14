@@ -18,8 +18,62 @@ Taskmaster *Taskmaster::GetInstance()
 }
 
 /*
-	INIT
+**	INIT
 */
+
+
+int			Taskmaster::initialization( const char** env )
+{
+
+	if (this->isRunningRootPermissions() == false)
+	{
+		std::cerr << "You must have root permissions to run this program." << std::endl;
+		return EXIT_FAILURE;
+	}
+
+
+	this->takeLockFile();
+	this->setEnv(env);
+
+#if LOG_CATEGORY_AUTO == false
+	this->initCategories();
+	// std::cout << Tintin_reporter::getLogManager() << std::endl;
+	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::getLogManager())
+
+# else
+	Tintin_reporter::getLogManager("./default.log");
+#endif
+	LOG_INFO(LOG_CATEGORY_INIT, "PID: " << this->getpid())
+
+
+	if (this->loadConfigFile(TM_DEF_CONFIGPATH))
+	{
+		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
+		this->exitProperly();
+		//REVIEW call to exit() here? serioulys? 
+ 		exit(EXIT_FAILURE);
+	}
+
+
+	if (this->startSignalCatcher() != EXIT_SUCCESS)
+	{
+		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to start JobManager. Aborting")
+		return EXIT_FAILURE;
+	}
+
+	if (this->startJobManager() != EXIT_SUCCESS)
+	{
+		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to start JobManager. Aborting")
+		return EXIT_FAILURE;
+	}
+
+    sigset_t set;
+	sigfillset(&set);
+	pthread_sigmask(SIG_SETMASK, &set, NULL);
+
+	return EXIT_SUCCESS;
+}
+
 
 bool		Taskmaster::isRunningRootPermissions( void ) const
 {
@@ -73,6 +127,8 @@ int			Taskmaster::exitProperly( void )
 	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly released.")
 	LOG_INFO(LOG_CATEGORY_INIT, "Destroying logger.")
 	Tintin_reporter::destroyLogManager();
+	JobManager::DestroyInstance();
+	SignalCatcher::DestroyInstance();
 	return EXIT_SUCCESS;
 }
 
@@ -384,73 +440,58 @@ int			Taskmaster::reloadConfigFile( void )
 
 int			Taskmaster::startJobManager( void )
 {
-	this->_jobManager = JobManager::GetInstance();
+	this->_jobManager = &JobManager::GetInstance();
 	return EXIT_SUCCESS;
 }
 
-void		Taskmaster::stopJobManager( void )
+int			Taskmaster::startSignalCatcher( void )
 {
-	JobManager::GetInstance()->stop( true);
-	JobManager::DestroyInstance();
-	this->_jobManager = nullptr;
+	this->_signalCatcher = &SignalCatcher::GetInstance();
+	return EXIT_SUCCESS;
 }
 
+// void		Taskmaster::stopThreads( void ) TODO remplace stops methods by stopThreads
+void		Taskmaster::stopJobManager( void )
+{
+	// JobManager::GetInstance().stop( );
+	JobManager::DestroyInstance();
+	// this->_jobManager = nullptr;
+}
+
+void		Taskmaster::stopSignalCatcher( void )
+{
+	// SignalCatcher::GetInstance().stop( );
+	SignalCatcher::DestroyInstance();
+	// this->_signalCatcher = nullptr;
+}
 
 /*
 ** --------------------------------- SIGNALS ---------------------------------
 */
 
 
-int			Taskmaster::initSignalsTm( void )
-{
-	memset(&(this->_sig_tm), 0, sizeof(this->_sig_tm));
+// int			Taskmaster::initSignalsTm( void )
+// {
+// 	memset(&(this->_sig_tm), 0, sizeof(this->_sig_tm));
 
-	sigemptyset(&(this->_sig_tm.sa_mask));
-	this->_sig_tm.sa_handler = Taskmaster::signalHandler;
-	this->_sig_tm.sa_flags = 0; 
+// 	sigemptyset(&(this->_sig_tm.sa_mask));
+// 	this->_sig_tm.sa_handler = Taskmaster::signalHandler;
+// 	this->_sig_tm.sa_flags = 0; 
 
-	if (sigaction(SIGINT, &this->_sig_tm, NULL)
-	|| sigaction(SIGHUP, &this->_sig_tm, NULL))
-	{
-		LOG_CRITICAL(LOG_CATEGORY_SIGNAL, "Failed to `sigaction` : " << strerror(errno))
-		return EXIT_FAILURE;
-	}
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGINT`.")
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGHUP`.")
+// 	if (sigaction(SIGINT, &this->_sig_tm, NULL)
+// 	|| sigaction(SIGHUP, &this->_sig_tm, NULL))
+// 	{
+// 		LOG_CRITICAL(LOG_CATEGORY_SIGNAL, "Failed to `sigaction` : " << strerror(errno))
+// 		return EXIT_FAILURE;
+// 	}
+// 	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGINT`.")
+// 	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGHUP`.")
 	
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "Taskmaster - Signal handlers successfuly started")
+// 	LOG_INFO(LOG_CATEGORY_SIGNAL, "Taskmaster - Signal handlers successfuly started")
 	
-	return EXIT_SUCCESS;
-}
+// 	return EXIT_SUCCESS;
+// }
 
-
-void		Taskmaster::signalHandler( int signal )
-{
-	if (signal != SIGHUP && signal != SIGINT)
-	{
-		LOG_WARN(LOG_CATEGORY_SIGNAL, "Unhandled signal received [" << signal << "].")
-		return ;
-	}
-	else
-		LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Signal °" + ntos(signal) + " catched.")
-
-	if (signal == SIGHUP)
-	{
-		LOG_WARN(LOG_CATEGORY_CONFIG, "SIGHUP : Reload config")
-		//TODO protect race contidiotn 
-		//tmp comment
-		Taskmaster::GetInstance()->reloadConfigFile();
-		JobManager::GetInstance()->setConfigChanged();
-		// Taskmaster::GetInstance()->stop(true);
-	}
-	else if (signal == SIGINT)
-	{
-		LOG_WARN(LOG_CATEGORY_INIT, "SIGINT : Prepare stopping...")
-		Taskmaster::GetInstance()->stop(true);
-	}	
-
-	return ;
-}
 
 
 /*

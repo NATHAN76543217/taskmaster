@@ -14,16 +14,17 @@
 # include "tm_values.hpp"
 # include "Config.hpp"
 # include "Tintin_reporter.hpp"
+# include "SignalCatcher.hpp"
 # include "JobManager.hpp"
 # include "Job.hpp"
 
 class Taskmaster
 {
 	private:
-		struct sigaction	_sig_tm;
 		pid_t				_pid;
 		Config				_config;
 		JobManager*			_jobManager;
+		SignalCatcher*		_signalCatcher;
 
 		/* Config values */
 		std::string		_lockpath;
@@ -38,6 +39,8 @@ class Taskmaster
 		/* Constructor */
 		Taskmaster() :
 			_pid(::getpid()),
+			_jobManager(nullptr),
+			_signalCatcher(nullptr),
 			_lockpath(TM_DEF_LOCKPATH),
 			_logpath(TM_DEF_LOGPATH),
 			_max_connections(TM_DEF_MAX_CONNECTIONS),
@@ -86,9 +89,8 @@ class Taskmaster
 		 */
 
 		/* Init */
+		int			initialization( const char** env );
 		bool		isRunningRootPermissions( void ) const;
-		int			initSignalsTm( void );
-		static void		signalHandler( int signal );
 		void		initCategories( void ) const;
 		pid_t		getpid( void ) const;
 		void		takeLockFile( void ) const;
@@ -98,6 +100,8 @@ class Taskmaster
 		void		setEnv( const char **env);
 
 		int			reloadConfigFile( void );
+		int			startSignalCatcher( void );
+		void		stopSignalCatcher( void );
 		int			startJobManager( void );
 		void		stopJobManager( void );
 		void		jobManager( void );

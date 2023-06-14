@@ -14,17 +14,20 @@
 //TODO daemonized main process 
 //TODO start childs according to config
 //TODO Code a client with the grfic library FTXUI
-// TODO ptrace on ourselves to avoid process monitoring
-// TODO parse config file at start to have color enabled on every log
+//TODO ptrace on ourselves to avoid process monitoring
+//TODO parse config file at start to have color enabled on every log
 //TODO define all auto restart possible values for conf
 //TODO use strsignal to interpret signal number to signal string
-// TODO Use <chrono> in all our time stuff (specialy timestamp)
+//TODO Use <chrono> in all our time stuff (specialy timestamp)
 //TODO for logger add mutex for every log_destination (with required checks) but only for files (std::cout/cerr is thread safe)
 //TODO implement a flood protection from a valid connection
 //TODO add config key envfromparent
 //TODO avoid duplicate in job names
 //TODO when change job._nbprocs (setnbprocs) just spawn od unspawn the right number of processes without touching the good ones
 //TODO add struct job_worker that contain the pid and status of child processes
+//DONE implement signal handler as a separate thread 
+//TODO transform all current code in thread-safe code
+//TODO implement restart policy for jobs
 
 class ClientData
 {
@@ -91,49 +94,12 @@ int main(int ac, char** av, const char** env)
 	
 	TM = Taskmaster::GetInstance();
 
-	if (TM->isRunningRootPermissions() == false)
-	{
-		std::cerr << "You must have root permissions to run this program." << std::endl;
+
+	if (TM->initialization(env) == EXIT_FAILURE)
 		return EXIT_FAILURE;
-	}
 
+	std::cout << "Initialization done" << std::endl;
 
-	TM->takeLockFile();
-
-	TM->setEnv(env);
-
-#if LOG_CATEGORY_AUTO == false
-	TM->initCategories();
-	// std::cout << Tintin_reporter::getLogManager() << std::endl;
-	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::getLogManager())
-
-# else
-	Tintin_reporter::getLogManager("./default.log");
-#endif
-
-
-	LOG_INFO(LOG_CATEGORY_INIT, "PID: " + ntos(TM->getpid()))
-
-	if (TM->initSignalsTm() != EXIT_SUCCESS)
-	{
-		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to init signal handlers.")
-		return EXIT_FAILURE;
-	}
-
-	if (TM->loadConfigFile(TM_DEF_CONFIGPATH))
-	{
-		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
-		TM->exitProperly();
-		//REVIEW call to exit() here? serioulys? 
- 		exit(EXIT_FAILURE);
-	}
-
-
-	if (TM->startJobManager() != EXIT_SUCCESS)
-	{
-		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to start JobManager. Aborting")
-		return EXIT_FAILURE;
-	}
 	// Display all jobs
 	// std::cout << "=== JOBS ===" << std::endl;
 	// for (std::list<Job>::const_iterator it = TM->_joblist.begin(); it != TM->_joblist.end(); it++)
@@ -154,6 +120,7 @@ int main(int ac, char** av, const char** env)
 
 		LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Main thread - exit main loop");
 		TM->stopJobManager();
+		TM->stopSignalCatcher();
 		LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
 		TM->exitProperly();
 

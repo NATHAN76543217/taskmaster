@@ -1,33 +1,33 @@
 #include "JobManager.hpp"
 /* Static methods definitions and static variables initalisation. */
-std::atomic<JobManager*>	JobManager::jobManager_ ;
+// std::atomic<JobManager*>	JobManager::jobManager_ ;
 //TODO I don't know why but JobManager is created twice
-JobManager*	JobManager::GetInstance( void )
-{
-    /**
-     * This is a safer way to create an instance. instance = new Singleton is
-     * dangeruous in case two instance threads wants to access at the same time
-     */
-    if(jobManager_.load() == nullptr)
-	{
-		LOG_INFO(LOG_CATEGORY_THREAD, "Create a new jobManager in thread " << std::this_thread::get_id())
-        jobManager_.store(new JobManager());
-		//REVIEW Is it smart to init JobLanager handlers here ? 
-		jobManager_.load()->initSignalsJm();
-		// jobManager_->startThreadJM();
-    }
-    return jobManager_.load();
-}
+// JobManager*	JobManager::GetInstance( void )
+// {
+//     /**
+//      * This is a safer way to create an instance. instance = new Singleton is
+//      * dangeruous in case two instance threads wants to access at the same time
+//      */
+//     if(jobManager_.load() == nullptr)
+// 	{
+// 		LOG_INFO(LOG_CATEGORY_THREAD, "Create a new jobManager in thread " << std::this_thread::get_id())
+//         jobManager_.store(new JobManager());
+// 		//REVIEW Is it smart to init JobLanager handlers here ? 
+// 		// jobManager_.load()->initSignalsJm();
+// 		// jobManager_->startThreadJM();
+//     }
+//     return jobManager_.load();
+// }
 
-void	JobManager::DestroyInstance( void )
-{
-	if(jobManager_.load() == nullptr)
-		return ;
-	jobManager_.load()->stopThreadJM();
-	delete jobManager_.load();
-	jobManager_.store(nullptr);
+// void	JobManager::DestroyInstance( void )
+// {
+// 	if(jobManager_.load() == nullptr)
+// 		return ;
+// 	jobManager_.load()->_stopThreadJM();
+// 	delete jobManager_.load();
+// 	jobManager_.store(nullptr);
 
-}
+// }
 
 
 
@@ -46,13 +46,13 @@ void			JobManager::operator()()
 	/* Init */
 	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - start - id: " << std::this_thread::get_id())
 	bool	tmpCycleUsefull = false;
-	std::unique_lock<std::mutex> lock(this->_mutex);
+	std::unique_lock<std::mutex> lock(this->_internal_mutex);
 
 	/* Loop */
 	do {
 		tmpCycleUsefull = false;
 		LOG_DEBUG(LOG_CATEGORY_JM, "JobManager - Mutex released")
-		if (this->_shouldStop)
+		if (!this->_running)
 		{
 			LOG_DEBUG(LOG_CATEGORY_JM, "Marked as should_stop.")
 			tmpCycleUsefull = true;
@@ -150,29 +150,20 @@ void		JobManager::notifyChildDeath( pid_t pid, int stat)
 	(void) stat;
 }
 
-int			JobManager::stopThreadJM( void )
-{
-	LOG_WARN(LOG_CATEGORY_THREAD, "Joining jobManager thread")
-	this->_threadJM.join();
-	LOG_WARN(LOG_CATEGORY_THREAD, "JobManager thread joined")
-	return EXIT_SUCCESS;
-}
-
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
 */
 
 
-void		JobManager::stop( bool stop )
+void		JobManager::stop( void )
 {
-	std::lock_guard<std::mutex> lk(this->_mutex);
-	this->_shouldStop = stop;
+	AThread::stop();
 	this->_hasUpdate.notify_one();
 }
 
 void			JobManager::setConfigChanged( void )
 {
-	std::lock_guard<std::mutex> lk(this->_mutex);
+	std::lock_guard<std::mutex> lk(this->_internal_mutex);
 	this->_configChanged = true;
 	this->_hasUpdate.notify_one();
 }
@@ -182,46 +173,6 @@ void			JobManager::setConfigChanged( void )
 ** --------------------------------- SIGNALS ---------------------------------
 */
 
-
-int			JobManager::initSignalsJm( void )
-{
-
-	memset(&(this->_sig_tm), 0, sizeof(this->_sig_tm));
-
-	sigemptyset(&(this->_sig_tm.sa_mask));
-	this->_sig_tm.sa_handler = JobManager::signalHandler;
-	this->_sig_tm.sa_flags = 0; 
-
-	if (sigaction(SIGCHLD, &(this->_sig_tm), NULL))
-	{
-		LOG_ERROR(LOG_CATEGORY_SIGNAL, "Failed to `sigaction` : " << strerror(errno) )
-		return EXIT_FAILURE;
-	}
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGCHLD`.")
-
-	LOG_INFO(LOG_CATEGORY_SIGNAL, "JobManager - Signal handlers successfuly started")
-	
-	return EXIT_SUCCESS;
-}
-
-void		JobManager::signalHandler( int signal )
-{
-	if (signal != SIGCHLD)
-	{
-		LOG_WARN(LOG_CATEGORY_SIGNAL, "Unhandled signal received [" << signal << "].")
-		return ;
-	}
-	else
-		LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Signal °" + ntos(signal) + " catched.")
-	
-	LOG_DEBUG(LOG_CATEGORY_JM, "SIGCHLD : a child process is exited.")
-	int		stat = 0;
-	pid_t	child_pid = 0;
-	if ((child_pid = waitpid(0, &stat, 0)) == -1)
-	{
-		LOG_ERROR(LOG_CATEGORY_JM, "Failed to `waitpid` : " << strerror(errno))
-		return ;
-	}
 	// if (WIFEXITED(stat) || WIFSIGNALED(stat))
 	// {
 	// 	if (WIFEXITED(stat))
@@ -241,9 +192,6 @@ void		JobManager::signalHandler( int signal )
 	// 	LOG_CRITICAL(LOG_CATEGORY_JM, "Process [" << child_pid << "] marked as 'not exited' and not 'signaled' but waitpid is set on 'NOHANG'.")
 	// 	return ;
 	// }
-
-	JobManager::GetInstance()->notifyChildDeath(child_pid, stat);
-}
 
 
 /* ************************************************************************** */
