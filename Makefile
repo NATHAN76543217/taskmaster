@@ -33,10 +33,10 @@ LOG_DIR		= logs
 # - fill only with name of the file
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
-SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Config.cpp JobManager.cpp Job.cpp SignalCatcher.cpp
+SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Config.cpp JobManager.cpp Job.cpp SignalCatcher.cpp utils.cpp
 SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
  
-HEADERS			=	AThread.hpp Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp JobManager.hpp Job.hpp SignalCatcher.hpp tm_values.hpp \
+HEADERS			=	AThread.hpp Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp JobManager.hpp Job.hpp SignalCatcher.hpp tm_values.hpp utils.hpp \
 					client.hpp dto_base.hpp packed_data.hpp packet.hpp server.hpp
 
 

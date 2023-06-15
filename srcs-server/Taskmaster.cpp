@@ -1,21 +1,5 @@
 # include "Taskmaster.hpp"
 
-/**
- * Static methods should be defined outside the class.
- */
-Taskmaster* Taskmaster::taskmaster_= nullptr;
-
-Taskmaster *Taskmaster::GetInstance()
-{
-    /**
-     * This is a safer way to create an instance. instance = new Singleton is
-     * dangeruous in case two instance threads wants to access at the same time
-     */
-    if(taskmaster_==nullptr){
-        taskmaster_ = new Taskmaster();
-    }
-    return taskmaster_;
-}
 
 /*
 **	INIT
@@ -25,14 +9,7 @@ Taskmaster *Taskmaster::GetInstance()
 int			Taskmaster::initialization( const char** env )
 {
 
-	if (this->isRunningRootPermissions() == false)
-	{
-		std::cerr << "You must have root permissions to run this program." << std::endl;
-		return EXIT_FAILURE;
-	}
 
-
-	this->takeLockFile();
 	this->setEnv(env);
 
 #if LOG_CATEGORY_AUTO == false
@@ -55,49 +32,10 @@ int			Taskmaster::initialization( const char** env )
 	}
 
 
-	if (this->startSignalCatcher() != EXIT_SUCCESS)
-	{
-		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to start JobManager. Aborting")
-		return EXIT_FAILURE;
-	}
-
-	if (this->startJobManager() != EXIT_SUCCESS)
-	{
-		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to start JobManager. Aborting")
-		return EXIT_FAILURE;
-	}
-
-    sigset_t set;
-	sigfillset(&set);
-	pthread_sigmask(SIG_SETMASK, &set, NULL);
-
 	return EXIT_SUCCESS;
 }
 
 
-bool		Taskmaster::isRunningRootPermissions( void ) const
-{
-	uid_t euid = geteuid();
-	if (euid != 0)
-		return false;
-	return true;	
-}
-
-
-
-// void		Taskmaster::initCategories( void ) const
-// {
-// 	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_LOGGER);
-// 	LOG_INFO(LOG_CATEGORY_DEFAULT, "FIRST WRITE TO DEFAULT")
-// 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT, "init.log");
-// 	LOG_INFO(LOG_CATEGORY_DEFAULT, "SECOND WRITE TO DEFAULT")
-// 	LOG_INFO(LOG_CATEGORY_INIT, "FIRST WRITE TO INIT")
-// 	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
-// 	LOG_INFO(LOG_CATEGORY_INIT, "INIT NOW point to default")
-// 	LOG_INFO("BLABLA", "Unknown to default")
-// 	const_cast<Taskmaster*>(this)->exitProperly();
-// 	exit(0);
-// }
 
 //TODO rename in init logger
 void		Taskmaster::initCategories( void ) const
@@ -123,12 +61,9 @@ void		Taskmaster::initCategories( void ) const
 int			Taskmaster::exitProperly( void )
 {
 	LOG_INFO(LOG_CATEGORY_INIT, "Exiting properly.")
-	this->freeLockFile();
-	LOG_INFO(LOG_CATEGORY_INIT, "Lock file '" + this->_lockpath + "' successfuly released.")
+	this->stopThreads();
 	LOG_INFO(LOG_CATEGORY_INIT, "Destroying logger.")
 	Tintin_reporter::destroyLogManager();
-	JobManager::DestroyInstance();
-	SignalCatcher::DestroyInstance();
 	return EXIT_SUCCESS;
 }
 
@@ -438,108 +373,44 @@ int			Taskmaster::reloadConfigFile( void )
 	return EXIT_SUCCESS;
 }
 
-int			Taskmaster::startJobManager( void )
+void		Taskmaster::startThreads( void )
 {
-	this->_jobManager = &JobManager::GetInstance();
-	return EXIT_SUCCESS;
-}
+	SignalCatcher::GetInstance();
+	JobManager::GetInstance();
 
-int			Taskmaster::startSignalCatcher( void )
-{
-	this->_signalCatcher = &SignalCatcher::GetInstance();
-	return EXIT_SUCCESS;
-}
+	sigset_t set;
+	sigfillset(&set);
+	pthread_sigmask(SIG_SETMASK, &set, NULL);
 
-// void		Taskmaster::stopThreads( void ) TODO remplace stops methods by stopThreads
-void		Taskmaster::stopJobManager( void )
-{
-	// JobManager::GetInstance().stop( );
-	JobManager::DestroyInstance();
-	// this->_jobManager = nullptr;
-}
-
-void		Taskmaster::stopSignalCatcher( void )
-{
-	// SignalCatcher::GetInstance().stop( );
-	SignalCatcher::DestroyInstance();
-	// this->_signalCatcher = nullptr;
-}
-
-/*
-** --------------------------------- SIGNALS ---------------------------------
-*/
-
-
-// int			Taskmaster::initSignalsTm( void )
-// {
-// 	memset(&(this->_sig_tm), 0, sizeof(this->_sig_tm));
-
-// 	sigemptyset(&(this->_sig_tm.sa_mask));
-// 	this->_sig_tm.sa_handler = Taskmaster::signalHandler;
-// 	this->_sig_tm.sa_flags = 0; 
-
-// 	if (sigaction(SIGINT, &this->_sig_tm, NULL)
-// 	|| sigaction(SIGHUP, &this->_sig_tm, NULL))
-// 	{
-// 		LOG_CRITICAL(LOG_CATEGORY_SIGNAL, "Failed to `sigaction` : " << strerror(errno))
-// 		return EXIT_FAILURE;
-// 	}
-// 	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGINT`.")
-// 	LOG_INFO(LOG_CATEGORY_SIGNAL, "New handler for signal `SIGHUP`.")
-	
-// 	LOG_INFO(LOG_CATEGORY_SIGNAL, "Taskmaster - Signal handlers successfuly started")
-	
-// 	return EXIT_SUCCESS;
-// }
-
-
-
-/*
-** --------------------------------- LOCK FILE ---------------------------------
-*/
-
-
-void		Taskmaster::takeLockFile( void ) const
-{
-	int fd = 0;
-
-	if ((fd = open(this->_lockpath.c_str(), O_CREAT|O_EXCL )) == -1) {
-		if (errno == EEXIST)
-		{
-			std::cerr << "The lock file already exist. Impossible to start a second instance of this program" << std::endl;
-		}
-		else
-			perror("open");
-		//TODO exit properly
-		// return EXI_t
-		exit(1);
+	{
+		std::lock_guard<std::mutex> lock(this->_internal_mutex);
+		this->_ready.notify_one();
 	}
-	std::cerr << "Lock file '" << this->_lockpath << "' successfuly taken." << std::endl;
-	close(fd);
 }
 
-void		Taskmaster::freeLockFile( void ) const
+void		Taskmaster::stopThreads( void )
 {
-	std::remove(this->_lockpath.c_str() );
+	JobManager::DestroyInstance();
+	SignalCatcher::DestroyInstance();
 }
+
 
 /*
-	UTILS
+** --------------------------------- SERVER ---------------------------------
 */
 
-
-pid_t			Taskmaster::getpid( void ) const
+void		Taskmaster::operator()( void )
 {
-	return this->_pid;
-}
+	std::unique_lock<std::mutex> lock(this->_internal_mutex);
+	this->_ready.wait(lock);
 
-void			Taskmaster::stop( bool stop )
-{
-	this->_shouldStop = stop;
-}
+	while ( this->_running )
+	{
+		LOG_ERROR(LOG_CATEGORY_NETWORK, "Put all server stuf here")
+		LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
 
-bool			Taskmaster::shouldStop( void ) const
-{
-	return this->_shouldStop;
-}
+		std::this_thread::sleep_for(std::chrono::seconds(5));
+	}
+	LOG_INFO(LOG_CATEGORY_NETWORK, "")
 
+}

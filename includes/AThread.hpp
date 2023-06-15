@@ -40,6 +40,13 @@ class AThread
 			LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Constructor <" << this->_name << ">.")
 		}
 
+		// AThread( const std::string & name) : 
+		// _thread(),
+		// _name(name),
+		// _running(true)
+		// {
+		// 	LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Constructor <" << this->_name << "> - nothread.")
+		// }
 
 	public:
 
@@ -56,9 +63,8 @@ class AThread
 
 		virtual void			operator()( void )
 		{
-			LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Operator()")	
+			LOG_CRITICAL(LOG_CATEGORY_THREAD, "AThread - Operator()")	
 		}
-		//  = 0;
 
 
 

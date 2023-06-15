@@ -2,6 +2,7 @@
 # include "cpp_argparse.hpp"
 # include "net/server.hpp"
 # include "dto.hpp"
+# include "utils.hpp"
 
 //DONE implement logging to files
 //DONE Finish to well format the LOGs
@@ -63,13 +64,13 @@ class TaskmasterClientsHandler : public ServerClientHandler<TaskmasterClientsHan
 };
 
 
+
 int main(int ac, char** av, const char** env)
 {
 	bool		help = false;
 
 	std::string	serverIp;
 	int			serverPort;
-	Taskmaster *TM = nullptr;
 
 	ARG_INIT(
 		ARG_GROUP("server", "Daemonized server running taskmaster",
@@ -92,13 +93,22 @@ int main(int ac, char** av, const char** env)
 		return (EXIT_SUCCESS);
 	}
 	
-	TM = Taskmaster::GetInstance();
-
-
-	if (TM->initialization(env) == EXIT_FAILURE)
+	if (isRunningRootPermissions() == false)
+	{
+		std::cerr << "You must have root permissions to run this program. Current UID: " << geteuid() << std::endl;
+		return EXIT_FAILURE;
+	}
+	if (takeLockFile(TM_DEF_LOCKPATH))
 		return EXIT_FAILURE;
 
-	std::cout << "Initialization done" << std::endl;
+	Taskmaster &TM = Taskmaster::GetInstance();
+
+
+	if (TM.initialization(env) == EXIT_FAILURE)
+	{
+		Taskmaster::DestroyInstance();
+		return EXIT_FAILURE;
+	}
 
 	// Display all jobs
 	// std::cout << "=== JOBS ===" << std::endl;
@@ -107,24 +117,16 @@ int main(int ac, char** av, const char** env)
 	// 	LOG_DEBUG(LOG_CATEGORY_JOB, *it);
 	// }
 
+	TM.startThreads();
 
 
+	LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Main thread - exit main loop");
+	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
+	TM.exitProperly();
 
-		do
-		{
-			// do taskmaster things...
-			std::this_thread::sleep_for(std::chrono::seconds(5));
-			LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Main thread - main loop");
-		}
-		while (!TM->shouldStop());
-
-		LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Main thread - exit main loop");
-		TM->stopJobManager();
-		TM->stopSignalCatcher();
-		LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
-		TM->exitProperly();
-
-		return EXIT_SUCCESS;
+	freeLockFile(TM_DEF_LOCKPATH);
+	std::cout << "Lock file '" << TM_DEF_LOCKPATH  << "' successfuly released." << std::endl;
+	return EXIT_SUCCESS;
 
 
 // 	// TODO daemonize better than this

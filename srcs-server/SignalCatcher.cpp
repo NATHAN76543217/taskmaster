@@ -67,14 +67,6 @@ void			SignalCatcher::operator()()
 	LOG_INFO(LOG_CATEGORY_SIGNAL, "Out thread - SignalCatcher")
 }
 
-// void			SignalCatcher::_stopThreadSC( void )
-// {
-// 	LOG_WARN(LOG_CATEGORY_THREAD, "Joining SignalCatcher thread")
-// 	this->_threadSC.join();
-// 	LOG_WARN(LOG_CATEGORY_THREAD, "SignalCatcher thread joined")
-// 	return EXIT_SUCCESS;
-// }
-
 /*
 ** --------------------------------- METHODS ----------------------------------
 */
