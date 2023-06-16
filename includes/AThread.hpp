@@ -6,7 +6,8 @@
 # include <thread>
 # include <atomic>
 # include <mutex>
-# include "Tintin_reporter.hpp"
+
+# include "tm_values.hpp"
 
 template <typename T> 
 class AThread
@@ -16,18 +17,14 @@ class AThread
 		std::string		_name;
 
 
-		void			_stopThread( void )
-		{
-			LOG_DEBUG(LOG_CATEGORY_THREAD, "Joining thread <" << this->_name << ">.")
-			this->_thread.join();
-			LOG_INFO(LOG_CATEGORY_THREAD, "Thread <" << this->_name<< "> joined")
-		}
-
 
 	protected:
 
-		bool			_running;
-		std::mutex		_internal_mutex;
+		bool						_running;
+		std::mutex					_internal_mutex;
+		std::mutex					_stop_mutex;
+		std::condition_variable		_ready;
+		std::condition_variable		_stop;
 
 		/* unique instance */ 
 		static std::atomic<T*>	instance_;
@@ -35,9 +32,13 @@ class AThread
 		AThread( T & super, const std::string & name) : 
 		_thread(&T::operator(), &super),
 		_name(name),
-		_running(true)
+		_running(true),
+		_internal_mutex(),
+		_stop_mutex(),
+		_ready(),
+		_stop()
 		{
-			LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Constructor <" << this->_name << ">.")
+			// LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Constructor <" << this->_name << ">.")
 		}
 
 		// AThread( const std::string & name) : 
@@ -63,15 +64,35 @@ class AThread
 
 		virtual void			operator()( void )
 		{
-			LOG_CRITICAL(LOG_CATEGORY_THREAD, "AThread - Operator()")	
+			// LOG_CRITICAL(LOG_CATEGORY_THREAD, "AThread - Operator()")	
 		}
 
 
+		virtual	void			start( void )
+		{
+			{
+				std::lock_guard<std::mutex> lock(this->_internal_mutex);
+				this->_running = true;
+			}
+			this->_ready.notify_all();
+		}
+
+		virtual	void			waitEnd( void )
+		{
+			std::unique_lock<std::mutex> lock(this->_stop_mutex);
+			this->_stop.wait(lock);
+			std::cerr << "out wait" << std::endl;
+			return ;
+		}
 
 		virtual	void			stop( void )
 		{
-			std::lock_guard<std::mutex> lk(this->_internal_mutex);
-			this->_running = false;
+			std::cerr << "stop - "<< this->_name << std::endl;
+			{
+				std::lock_guard<std::mutex> lock(this->_internal_mutex);
+				this->_running = false;
+			}
+			this->_stop.notify_all();
 		}
 
 		const std::string &getName( void ) const
@@ -81,29 +102,37 @@ class AThread
 
 
 };
+
+
+
+
+
 	/* unique instance initialization*/ 
 	template<typename T>
 		std::atomic<T*>	AThread<T>::instance_{nullptr};
+
 
 	template<typename T>
 		T&		AThread<T>::GetInstance( const std::string & name )
 		{
 			if(instance_.load() == nullptr)
 			{
-				LOG_INFO(LOG_CATEGORY_STDOUT, "Create a <" << name << "> thread : " << typeid(T).name() )
+				// LOG_INFO(LOG_CATEGORY_STDOUT, "Create a <" << name << "> thread : " << typeid(T).name() )
+				// std::cout << "Called once for [" << name << "]" << std::endl;
 				instance_.store(new T(name));
 			}
 			return *(instance_.load());
 		}
+
 
 	template<typename T>
 		void		AThread<T>::DestroyInstance( void )
 		{
 			if(instance_.load() == nullptr)
 				return ;
-			LOG_INFO(LOG_CATEGORY_THREAD, "Destroying <" << instance_.load()->getName() << "> on thread : " << std::this_thread::get_id())
+			// LOG_INFO(LOG_CATEGORY_THREAD, "Destroying <" << instance_.load()->getName() << "> on thread : " << std::this_thread::get_id())
 			instance_.load()->stop();
-			instance_.load()->_stopThread();
+			instance_.load()->_thread.join();
 			delete instance_.load();
 			instance_.store(nullptr);
 

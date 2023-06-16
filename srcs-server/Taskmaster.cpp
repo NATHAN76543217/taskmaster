@@ -6,31 +6,67 @@
 */
 
 
-int			Taskmaster::initialization( const char** env )
+Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 {
+	SignalCatcher::GetInstance();
+	
+	/* Block reception of all signals on this thread */
+	sigset_t set;
+	sigfillset(&set);
+	pthread_sigmask(SIG_SETMASK, &set, NULL);
 
-
-	this->setEnv(env);
-
+	Taskmaster & TM = Taskmaster::GetInstance(name);
+	
+	Tintin_reporter& logger = Tintin_reporter::GetInstance("./default.log");
 #if LOG_CATEGORY_AUTO == false
-	this->initCategories();
-	// std::cout << Tintin_reporter::getLogManager() << std::endl;
-	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::getLogManager())
+	TM.initCategories();
+	std::cout << logger << std::endl;
+	// LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::GetInstance())
 
 # else
 	Tintin_reporter::getLogManager("./default.log");
 #endif
-	LOG_INFO(LOG_CATEGORY_INIT, "PID: " << this->getpid())
+	JobManager::GetInstance();
 
+	return TM;
+}
+
+
+
+void			Taskmaster::DestroyInstance( void )
+{
+	std::cout << "Destroy TM" << std::endl; 
+	JobManager::DestroyInstance();
+	Tintin_reporter::DestroyInstance();
+	SignalCatcher::DestroyInstance();
+	AThread<Taskmaster>::DestroyInstance();
+}
+
+
+
+int			Taskmaster::initialization( const char** env )
+{
+	std::cerr << "TM Before init lock" << std::endl;
+	std::unique_lock<std::mutex> lock(this->_internal_mutex);
+	std::cerr << "TM After init lock" << std::endl;
+
+	this->setEnv(env);
+
+	LOG_INFO(LOG_CATEGORY_INIT, "PID: " << ::getpid())
 
 	if (this->loadConfigFile(TM_DEF_CONFIGPATH))
 	{
 		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
-		this->exitProperly();
 		//REVIEW call to exit() here? serioulys? 
- 		exit(EXIT_FAILURE);
+ 		// exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 
+
+	std::cerr << "TM END BEFORE UNCLOCK init lock" << std::endl;
+
+	// lock.unlock();
+	std::cerr << "TM END init lock" << std::endl;
 
 	return EXIT_SUCCESS;
 }
@@ -40,32 +76,22 @@ int			Taskmaster::initialization( const char** env )
 //TODO rename in init logger
 void		Taskmaster::initCategories( void ) const
 {
-	Tintin_reporter::getLogManager("./default.log").addCategory(LOG_CATEGORY_DEFAULT);
 	// Tintin_reporter::getLogManager(LOG_STDOUT_MAGIC).addCategory(LOG_CATEGORY_DEFAULT);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_LOGGER, LOG_STDOUT_MAGIC);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_INIT);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_NETWORK);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_CONFIG);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JOB);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_JM);
-	Tintin_reporter::getLogManager().addCategory(LOG_CATEGORY_THREAD, "./thread.log");
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_DEFAULT);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_LOGGER, LOG_STDOUT_MAGIC);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_INIT);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_NETWORK);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_CONFIG);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JOB);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JM);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_THREAD, "./thread.log");
 }
 
 
 /* 
 	Methods implementation
 */
-
-
-int			Taskmaster::exitProperly( void )
-{
-	LOG_INFO(LOG_CATEGORY_INIT, "Exiting properly.")
-	this->stopThreads();
-	LOG_INFO(LOG_CATEGORY_INIT, "Destroying logger.")
-	Tintin_reporter::destroyLogManager();
-	return EXIT_SUCCESS;
-}
 
 
 /*
@@ -321,7 +347,7 @@ int			Taskmaster::_parseConfigServer( void )
 	if (this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR])
 	{
 		this->_logcolor = this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR].as<bool>();
-		Tintin_reporter::getLogManager().setColor(this->_logcolor);
+		Tintin_reporter::GetInstance().setColor(this->_logcolor);
 	}
 	return EXIT_SUCCESS;
 }
@@ -373,27 +399,6 @@ int			Taskmaster::reloadConfigFile( void )
 	return EXIT_SUCCESS;
 }
 
-void		Taskmaster::startThreads( void )
-{
-	SignalCatcher::GetInstance();
-	JobManager::GetInstance();
-
-	sigset_t set;
-	sigfillset(&set);
-	pthread_sigmask(SIG_SETMASK, &set, NULL);
-
-	{
-		std::lock_guard<std::mutex> lock(this->_internal_mutex);
-		this->_ready.notify_one();
-	}
-}
-
-void		Taskmaster::stopThreads( void )
-{
-	JobManager::DestroyInstance();
-	SignalCatcher::DestroyInstance();
-}
-
 
 /*
 ** --------------------------------- SERVER ---------------------------------
@@ -401,16 +406,30 @@ void		Taskmaster::stopThreads( void )
 
 void		Taskmaster::operator()( void )
 {
-	std::unique_lock<std::mutex> lock(this->_internal_mutex);
-	this->_ready.wait(lock);
-
-	while ( this->_running )
+	std::cerr << "Taskmaster (server) wait to start." << std::endl;
 	{
-		LOG_ERROR(LOG_CATEGORY_NETWORK, "Put all server stuf here")
-		LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
+		std::unique_lock<std::mutex> lock(this->_internal_mutex);
+		this->_ready.wait(lock);
+	}
+	std::cerr << "Taskmaster (server) start." << std::endl;
+
+	while ( true )
+	{
+		// LOG_ERROR(LOG_CATEGORY_NETWORK, "Put all server stuf here")
+		// LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
 
 		std::this_thread::sleep_for(std::chrono::seconds(5));
+		
+		{
+			std::lock_guard<std::mutex> lk(this->_internal_mutex);
+			if (!this->_running)
+			{
+				break ;
+			}
+		}
 	}
-	LOG_INFO(LOG_CATEGORY_NETWORK, "")
+	std::cerr << "Taskmaster (server) out." << std::endl;
+
+	// LOG_INFO(LOG_CATEGORY_NETWORK, "out of TM loop")
 
 }

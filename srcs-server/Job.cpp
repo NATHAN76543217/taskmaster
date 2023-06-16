@@ -161,7 +161,7 @@ int				Job::spawnProcess( void )
 		{
 			uint i = 0;
 			uint y = 0;
-			const char** env_parent = Taskmaster::GetInstance()->getEnv();
+			const char** env_parent = Taskmaster::GetInstance().getEnv();
 			std::vector<char> tmpvector;
 			while (env_parent[i] != NULL)
 			{

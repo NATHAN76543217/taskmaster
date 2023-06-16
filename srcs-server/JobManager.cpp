@@ -43,6 +43,13 @@
 // }
 void			JobManager::operator()()
 {
+	std::cerr << "JobManager wait to start" << std::endl;
+	{
+		std::unique_lock<std::mutex> lock_start(this->_internal_mutex);
+		this->_ready.wait(lock_start);
+	}
+	std::cerr << "JobManager start." << std::endl;
+
 	/* Init */
 	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - start - id: " << std::this_thread::get_id())
 	bool	tmpCycleUsefull = false;
@@ -72,7 +79,7 @@ void			JobManager::operator()()
 		}
 		
 		{
-			std::lock_guard<std::mutex> lock(this->_mutexChildlist);
+			std::lock_guard<std::mutex> lk(this->_mutexChildlist);
 			tmpCycleUsefull = true;
 			for (std::vector<pid_t>::iterator it_pid = this->_changedChilds.begin(); it_pid != this->_changedChilds.end(); it_pid++)
 			{
@@ -88,15 +95,16 @@ void			JobManager::operator()()
 		LOG_DEBUG(LOG_CATEGORY_JM, "JobManager - Wait")
 		this->_hasUpdate.wait(lock);
 	}
-	while (true);
+	while (this->_running);
 	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - end - id: " << std::this_thread::get_id())
 }
 
 int			JobManager::_updateConfig( void )
 {
-	Taskmaster* TM = Taskmaster::GetInstance();
+
+	Taskmaster& TM = Taskmaster::GetInstance();
 	/* Update the configuration */
-	for (std::list<Job>::const_iterator job = TM->_joblist.begin(); job != TM->_joblist.end(); job++)
+	for (std::list<Job>::const_iterator job = TM._joblist.begin(); job != TM._joblist.end(); job++)
 	{
 		/* find job in running list */
 		std::list<Job>::iterator rjob = this->_runningjobs.begin();
@@ -143,9 +151,11 @@ int			JobManager::_updateConfig( void )
 
 void		JobManager::notifyChildDeath( pid_t pid, int stat)
 {
-	std::lock_guard<std::mutex> lock(this->_mutexChildlist);
-	this->_childChanged = true;
-	this->_changedChilds.push_back(pid);
+	{
+		std::lock_guard<std::mutex> lock(this->_mutexChildlist);
+		this->_childChanged = true;
+		this->_changedChilds.push_back(pid);
+	}
 	this->_hasUpdate.notify_one();
 	(void) stat;
 }
@@ -157,14 +167,17 @@ void		JobManager::notifyChildDeath( pid_t pid, int stat)
 
 void		JobManager::stop( void )
 {
-	AThread::stop();
+	AThread<JobManager>::stop();
 	this->_hasUpdate.notify_one();
 }
 
+
 void			JobManager::setConfigChanged( void )
 {
-	std::lock_guard<std::mutex> lk(this->_internal_mutex);
-	this->_configChanged = true;
+	{
+		std::lock_guard<std::mutex> lk(this->_internal_mutex);
+		this->_configChanged = true;
+	}
 	this->_hasUpdate.notify_one();
 }
 

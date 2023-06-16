@@ -98,17 +98,21 @@ int main(int ac, char** av, const char** env)
 		std::cerr << "You must have root permissions to run this program. Current UID: " << geteuid() << std::endl;
 		return EXIT_FAILURE;
 	}
+
 	if (takeLockFile(TM_DEF_LOCKPATH))
 		return EXIT_FAILURE;
 
-	Taskmaster &TM = Taskmaster::GetInstance();
+	Taskmaster &TM = Taskmaster::CreateInstance("Taskmaster");
 
+		std::cerr << "Initialization BEFORE." << std::endl;
 
 	if (TM.initialization(env) == EXIT_FAILURE)
 	{
+		std::cerr << "Initialization failed." << std::endl;
 		Taskmaster::DestroyInstance();
 		return EXIT_FAILURE;
 	}
+	std::cerr << "Initialization AFTER." << std::endl;
 
 	// Display all jobs
 	// std::cout << "=== JOBS ===" << std::endl;
@@ -116,16 +120,23 @@ int main(int ac, char** av, const char** env)
 	// {
 	// 	LOG_DEBUG(LOG_CATEGORY_JOB, *it);
 	// }
-
-	TM.startThreads();
-
+	Tintin_reporter::GetInstance().start();
+	SignalCatcher::GetInstance().start();
+	JobManager::GetInstance().start();
+	TM.start();
+	std::cerr << "main start to wait" << std::endl;
+	TM.waitEnd();
+	std::cerr << "main start final part" << std::endl;
 
 	LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Main thread - exit main loop");
 	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
-	TM.exitProperly();
+
+	Taskmaster::DestroyInstance();
 
 	freeLockFile(TM_DEF_LOCKPATH);
+	
 	std::cout << "Lock file '" << TM_DEF_LOCKPATH  << "' successfuly released." << std::endl;
+	std::cout << "Main thread exited" << std::endl;
 	return EXIT_SUCCESS;
 
 

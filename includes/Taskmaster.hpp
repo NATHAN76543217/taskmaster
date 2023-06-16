@@ -9,7 +9,6 @@
 # include <fcntl.h>
 # include <signal.h>
 
-
 # include "yaml-cpp/yaml.h"
 # include "tm_values.hpp"
 # include "Config.hpp"
@@ -19,13 +18,10 @@
 # include "JobManager.hpp"
 # include "Job.hpp"
 
-bool		isRunningRootPermissions( void );
-
 class Taskmaster : public virtual AThread<Taskmaster>
 {
 	private:
 		Config					_config;
-		std::condition_variable _ready;
 		/* Config values */
 		
 		std::string		_lockpath;
@@ -37,18 +33,17 @@ class Taskmaster : public virtual AThread<Taskmaster>
 
 	protected:
 		/* Constructor */
-		Taskmaster() :
-			AThread(*this, "Taskmaster"),
-			_ready(),
+		Taskmaster(const std::string & name = "Taskmaster") :
+			AThread(*this, name),
 			_lockpath(TM_DEF_LOCKPATH),
 			_logpath(TM_DEF_LOGPATH),
 			_max_connections(TM_DEF_MAX_CONNECTIONS),
-			_logcolor(TM_DEF_LOGCOLOR),
+			_logcolor(TM_DEF_LOGCOLOR)
 		{
 			this->_parentEnv.store(nullptr);
 		}
 		/* Destructor */
-		// ~Taskmaster() {}
+		~Taskmaster() {}
 
 		/* Uniq instance */
 		// static Taskmaster* taskmaster_;
@@ -60,6 +55,8 @@ class Taskmaster : public virtual AThread<Taskmaster>
 
 	public:
 
+		static Taskmaster&		CreateInstance( const std::string & name );
+		static void				DestroyInstance( void );
 
 		void		operator()( void );
 
@@ -67,7 +64,6 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		/* Init */
 		int			initialization( const char** env );
 		void		initCategories( void ) const;
-		pid_t		getpid( void ) const;
 
 		const char** getEnv( void ) const;
 		void		setEnv( const char **env);
@@ -75,12 +71,8 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		int			loadConfigFile(const std::string & path);
 		int			reloadConfigFile( void );
 		
-		void		startThreads( void );
-		void		stopThreads( void );
-
-		int			exitProperly( void );
-
 	// friend class JobManager;
+	friend class JobManager;
 	friend class AThread;
 };
 

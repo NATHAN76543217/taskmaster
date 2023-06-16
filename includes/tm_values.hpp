@@ -9,6 +9,15 @@ enum job_policy {
 	onfailure
 };
 
+enum job_status {
+	starting,
+	running,
+	stopped,
+	incomplete,
+	exited,
+	terminated
+};
+
 # define TM_DEF_MAX_CONNECTIONS 3
 # define TM_DEF_CONFIGPATH "./config_test.yaml"
 // # define TM_DEF_CONFIGPATH "./config_template.yaml"
@@ -54,6 +63,83 @@ enum job_policy {
 # define TM_FIELD_ENV			"env"
 
 //TODO define all def values
+
+
+/* LOGGER */
+
+
+# define LOG_LEVEL_DEBUG	0
+# define LOG_LEVEL_INFO		1
+# define LOG_LEVEL_WARNING	2
+# define LOG_LEVEL_ERROR	3
+# define LOG_LEVEL_CRITICAL	4
+
+// define basic ansi colors
+# define RESET_ANSI		"\033[0m"		
+# define BOLD_ANSI		"\033[1m"		
+# define RED_ANSI		"\033[91m"		
+# define YELLOW_ANSI	"\033[93m"		
+# define BLUE_ANSI		"\033[96m"		
+# define LGREY_ANSI		"\033[37m"		
+# define GREEN_ANSI		"\033[92m"		
+# define DBLUE_ANSI		"\033[94m"	
+
+// define prefixes RGB's here
+# define LOG_LEVEL_DEBUG_COLOR    "\033[38;2;180;210;255m\033[3m"
+# define LOG_LEVEL_INFO_COLOR     "\033[38;2;150;250;105m"
+# define LOG_LEVEL_WARNING_COLOR  "\033[38;2;250;230;15m\033[3m"
+# define LOG_LEVEL_ERROR_COLOR    "\033[38;2;255;67;33m\033[1m"
+# define LOG_LEVEL_CRITICAL_COLOR	"\033[48;2;250;100;20m\033[1m"
+
+// define message output color here
+# define LOG_LEVEL_DEBUG_MSG_COLOR    "\033[38;2;180;210;255m"
+# define LOG_LEVEL_INFO_MSG_COLOR     "\033[38;2;230;230;210m"
+# define LOG_LEVEL_WARNING_MSG_COLOR  YELLOW_ANSI "\033[38;2;250;230;40m"
+# define LOG_LEVEL_ERROR_MSG_COLOR    "\033[38;2;255;77;50m"
+# define LOG_LEVEL_CRITICAL_MSG_COLOR "\033[38;2;250;190;80m"
+
+// define prefix structure here
+# define LOG_LEVEL_PREFIX_DEBUG				" [" LOG_LEVEL_DEBUG_COLOR "DEBUG" RESET_ANSI "]  - " LOG_LEVEL_DEBUG_MSG_COLOR
+# define LOG_LEVEL_PREFIX_INFO				" [" LOG_LEVEL_INFO_COLOR "INFO" RESET_ANSI "]   - " LOG_LEVEL_INFO_MSG_COLOR
+# define LOG_LEVEL_PREFIX_WARNING			" [" LOG_LEVEL_WARNING_COLOR "WARN" RESET_ANSI "]   - " LOG_LEVEL_WARNING_MSG_COLOR
+# define LOG_LEVEL_PREFIX_ERROR				" [" LOG_LEVEL_ERROR_COLOR "ERROR" RESET_ANSI "]  - " LOG_LEVEL_ERROR_MSG_COLOR
+# define LOG_LEVEL_PREFIX_CRITICAL			" [" LOG_LEVEL_CRITICAL_COLOR "CRITIC" RESET_ANSI "] - " LOG_LEVEL_CRITICAL_MSG_COLOR
+# define LOG_LEVEL_PREFIX_DEBUG_NOCOLOR		" [DEBUG]  - "
+# define LOG_LEVEL_PREFIX_INFO_NOCOLOR		" [INFO]   - "
+# define LOG_LEVEL_PREFIX_WARNING_NOCOLOR	" [WARN]   - "
+# define LOG_LEVEL_PREFIX_ERROR_NOCOLOR		" [ERROR]  - "
+# define LOG_LEVEL_PREFIX_CRITICAL_NOCOLOR	" [CRITIC] - "
+
+
+// define timestamp color here
+# define LOG_TIMESTAMP_COLOR    "\033[38;2;100;100;120m"
+
+# define LOG_LEVEL_NAME_MAXSIZE		8
+# define LOG_CATEGORY_NAME_MAXSIZE	7
+
+# define LOG_STDOUT_MAGIC 		"STDOUT"
+# define LOG_STDERR_MAGIC 		"STDERR"
+
+# define LOG_CATEGORY_DEFAULT	"DEFAULT"
+# define LOG_CATEGORY_INIT		"INIT"
+# define LOG_CATEGORY_SIGNAL	"SIGNAL"
+# define LOG_CATEGORY_NETWORK	"NETWORKING"
+# define LOG_CATEGORY_CONFIG	"CONFIG"
+# define LOG_CATEGORY_JOB		"JOB"
+# define LOG_CATEGORY_JM		"JOBMNGR"
+# define LOG_CATEGORY_THREAD	"THREAD"
+# define LOG_CATEGORY_LOGGER	"LOGGER"
+# define LOG_CATEGORY_STDOUT	LOG_STDOUT_MAGIC
+# define LOG_CATEGORY_STDERR	LOG_STDERR_MAGIC
+
+
+# define LOG_TIMESTAMP_DEFAULT 0
+
+# define THREADTAG_SIGNALCATCHER	"[SignalCatcher] "
+# define THREADTAG_LOGGER			"[Logger] "
+# define THREADTAG_JOBMANAGER		"[JobManager] "
+# define THREADTAG_MAIN				"[Main] "
+# define THREADTAG_TASKMASTER		"[Taskmaster] "
 
 
 # endif //TMP_VALUES_HPP
