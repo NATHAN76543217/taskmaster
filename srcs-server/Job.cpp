@@ -1,12 +1,86 @@
 #include "Job.hpp"
 
 
+std::ostream &			operator<<( std::ostream & o, Job const & i );
+
+int						Job::Compare( const Job & j1, const Job & j2)	
+{
+	if (j1.getName().compare(j2.getName()))
+		return -1;
+	
+	if (j1.getCmd().compare(j2.getCmd()))
+	{
+		std::cout << "CMD" << std::endl;
+		return 1;
+	}
+	if (j1.getNbProcs() != j2.getNbProcs())
+	{
+		std::cout << "NBPROCS" << std::endl;
+		return 1;
+	}
+	if (j1.getAutostart() != j2.getAutostart())
+	{
+		std::cout << "AUTOSTART" << std::endl;
+		return 1;
+	}
+	if (j1.getWorkingdir().compare(j2.getWorkingdir()))
+	{
+		std::cout << "WORKDIR" << std::endl;
+		return 1;
+	}
+	if ( (j1.getAutostart() != j2.getAutostart())
+	|| (j1.getRestartPolicy() != j2.getRestartPolicy())
+	|| (j1.getNbRetry() != j2.getNbRetry())
+	// || (j1.getExitCodes() != j2.getExitCodes())
+	|| (j1.getStarttime() != j2.getStarttime())
+	|| (j1.getStoptime() != j2.getStoptime())
+	|| (j1.getStopSignal() != j2.getStopSignal())
+	|| (j1.getStdout().compare(j2.getStdout()))
+	|| (j1.getStderr().compare(j2.getStderr()))
+	// || (j1.getEnvfromparent() != j2.getEnvfromparent())
+	// || (j1.getEnv() != j2.getEnv())
+	)
+	{
+		return 1;
+	}
+	return 0;
+}
+
+// int						Job::Compare( const Job & j1, const Job & j2)	
+// {
+// 	if (j1.getName().compare(j2.getName()))
+// 	{
+// 		if ((j1.getCmd().compare(j2.getCmd()))
+// 		|| (j1.getNbProcs() != j2.getNbProcs())
+// 		|| (j1.getWorkingdir().compare(j2.getWorkingdir()))
+// 		|| (j1.getAutostart() != j2.getAutostart())
+// 		|| (j1.getRestartPolicy() != j2.getRestartPolicy())
+// 		|| (j1.getNbRetry() != j2.getNbRetry())
+// 		// || (j1.getExitCodes() != j2.getExitCodes())
+// 		|| (j1.getStarttime() != j2.getStarttime())
+// 		|| (j1.getStoptime() != j2.getStoptime())
+// 		|| (j1.getStopSignal() != j2.getStopSignal())
+// 		|| (j1.getStdout().compare(j2.getStdout()))
+// 		|| (j1.getStderr().compare(j2.getStderr()))
+// 		// || (j1.getEnvfromparent() != j2.getEnvfromparent())
+// 		// || (j1.getEnv() != j2.getEnv())
+// 		)
+// 		{
+// 			std::cout << "CMP J1 " << j1 << " and J2 " << j2 << " differs." << std::endl;
+// 			return 1;
+// 		}
+// 		return 0;
+// 	}
+	
+// 	return -1;
+// }
+
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
 */
 Job::Job(): 
-_shouldUpdate(false),
-_status(JOB_STATUS_NOTSTARTED),
+_status(not_started),
+_complete(true),
 _pid(),
 _name(""),
 _cmd(""),
@@ -27,8 +101,8 @@ _env()
 }
 
 Job::Job( const Job & src ) : 
-_shouldUpdate(src._shouldUpdate),
 _status(src._status),
+_complete(src._complete),
 _pid(src._pid),
 _name(src._name), 
 _cmd(src._cmd),
@@ -67,8 +141,8 @@ Job &				Job::operator=( Job const & rhs )
 	if ( this == &rhs )
 		return *this;
 	
-	this->_shouldUpdate = rhs._shouldUpdate;
 	this->_status = rhs._status;
+	this->_complete = rhs._complete;
 	this->_pid = rhs._pid;
 	this->_name = rhs._name;
 	this->_cmd = rhs._cmd;
@@ -92,11 +166,12 @@ std::ostream &			operator<<( std::ostream & o, Job const & i )
 {
 	o << "Job config:" << std::endl;
 	o << " - shouldUpdate : " << i.getName() << std::endl;
-	o << " - status : " << i.getName() << std::endl;
-	o << " - pid : " << i.getName() << std::endl;
 	o << " - name : " << i.getName() << std::endl;
+	o << " - complete : " << i.getName() << std::endl;
+	o << " - status : " << i.getStatusString() << std::endl;
 	o << " - cmd : " << i.getCmd() << std::endl;
 	o << " - nbprocs : " << i.getNbProcs() << std::endl;
+	o << " - pid : " << i.getName() << std::endl;
 	o << " - umask : " << i.getUmask() << std::endl;
 	o << " - workingdir : " << i.getWorkingdir() << std::endl;
 	o << " - autostart : " << i.getAutostart() << std::endl;
@@ -201,12 +276,104 @@ int				Job::spawnProcess( void )
 	else
 	{
 		//Parent
-		this->_pid.push_back(pid);
+		this->_pid.insert(pid);
 		LOG_INFO(LOG_CATEGORY_JOB, "[" << this->_name << "] Process '" << pid << "' started.")
 	}
 	return EXIT_SUCCESS;
 }
 
+int				Job::kill_pid( pid_t pid )
+{
+	int error = 0;
+	int ret = ::kill(pid, SIGKILL);
+	if ( ret )
+	{
+		LOG_ERROR(LOG_CATEGORY_JOB, "Failed to kill pid [" << pid << "] : " << strerror(errno))
+	}
+	LOG_INFO(LOG_CATEGORY_JOB, "Kill sent to pid [" << pid << "] : " << strerror(errno))
+
+	return (error);
+}
+
+int				Job::kill( void )
+{
+	int ret = 0;
+	int error = 0;
+
+	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	{
+		ret = ::kill(*it, SIGKILL);
+		if ( ret )
+		{
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to kill subprocess [" << *it << "] : " << strerror(errno))
+		}
+	}
+	return (error);
+}
+
+int				Job::stop( void )
+{
+	bool error = false;
+	int ret = 0;
+	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	{
+		ret = ::kill(*it, SIGSTOP);
+		if ( ret )
+		{
+			error = true;
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to stop subprocess [" << *it << "] : " << strerror(errno))
+		}
+	}
+	return (error);
+}
+
+int				Job::terminate( void )
+{
+	bool error = false;
+	int ret = 0;
+	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	{
+		ret = ::kill(*it, SIGTERM);
+		if ( ret )
+		{
+			error = true;
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to terminate subprocess [" << *it << "] : " << strerror(errno))
+		}
+	}
+	return (error);
+}
+
+int				Job::suspend( void )
+{
+	bool error = false;
+	int ret = 0;
+	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	{
+		ret = ::kill(*it, SIGTSTP);
+		if ( ret )
+		{
+			error = true;
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to suspend subprocess [" << *it << "] : " << strerror(errno))
+		}
+	}
+	return (error);
+}
+
+int				Job::resume( void )
+{
+	bool error = false;
+	int ret = 0;
+	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	{
+		ret = ::kill(*it, SIGCONT);
+		if ( ret )
+		{
+			error = true;
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to wake subprocess [" << *it << "] : " << strerror(errno))
+		}
+	}
+	return (error);
+}
 
 
 int				Job::start( void )
@@ -214,20 +381,22 @@ int				Job::start( void )
 	uint i = 0;
 	
 	LOG_DEBUG(LOG_CATEGORY_JOB,  "[" << this->_name << "] start.")
-	this->_status = JOB_STATUS_STARTING;
+	this->_status = starting;
 	//REVIEW make a for loop
+	this->_complete = true;
 	while (i < this->_nbprocs )
 	{
 		if (this->spawnProcess() == EXIT_FAILURE)
 		{
-			this->_status = JOB_STATUS_INCOMPLETE;
+			this->_complete = false;
 		}
 		i++;
 	}
+	/* TODO Check restart policy here */
 	/* Check if everything is running smoothly */
-	if (this->_status == JOB_STATUS_STARTING)
+	if (this->_complete == true)
 	{
-		this->_status = JOB_STATUS_RUNNING;
+		this->_status = running;
 		LOG_INFO(LOG_CATEGORY_JOB,  "[" << this->_name << "] started successfuly.")
 	}
 	else
@@ -235,11 +404,45 @@ int				Job::start( void )
 	return EXIT_SUCCESS;
 }
 
+int				Job::gracefullStop( void )
+{
+	if (this->terminate() != EXIT_SUCCESS)
+		return this->kill();
+	std::this_thread::sleep_for(std::chrono::seconds(this->_stoptime));
+	int stat = 0;
+	int ret = 0;
+	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	{
+		ret = waitpid(*it, &stat, WNOHANG);
+		if ( ret == 1)
+		{
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to `waitpid` : " << strerror(errno) )
+			continue;
+		}
+		if (!(WIFEXITED(stat) || WIFSIGNALED(stat)))
+		{
+			LOG_INFO(LOG_CATEGORY_JOB, "process [" << *it<< "] not exited after a timeout of [" << this->_stoptime << "] seconds. It will be Killed immediatly.")
+			this->kill_pid(*it);
+			break;
+		}
+		ret = 0;
+		stat = 0;
+		this->setStatus(terminated);
+	}
+	return EXIT_SUCCESS;
+}
+
+// int			Job::refreshStatus()
+// {
+
+// }
+
 //TODO set default value here and call this function in constructor? 
+//TODO before restet: catch death of all childs
 void			Job::resetDefault( void )
 {
 	this->_name = "";
-	this->_status = JOB_STATUS_NOTSTARTED; 
+	this->_status = not_started; 
 	this->_cmd = "";
 	this->_nbprocs = TM_DEF_NBPROCS;
 	this->_workingdir = "";
@@ -255,14 +458,25 @@ void			Job::resetDefault( void )
 	this->_env.clear();
 }
 
+
+bool		Job::hasPid( pid_t pid )
+{
+	return (this->_pid.find(pid) != this->_pid.end());
+}
+
+bool		Job::rmPid( pid_t pid )
+{
+	return this->_pid.erase(pid);
+}
+
+
+
 /*
 ** --------------------------------- CHECKERS ---------------------------------
 */
 
-void			Job::setStatus( uint status )
+void			Job::setStatus( job_status status )
 {
-	if (status >= JOB_STATUS_RUNNING)
-		return ;
 	this->_status = status;
 }
 
@@ -362,7 +576,7 @@ void			Job::addEnv(const std::string & key, const std::string & value)
 ** --------------------------------- GETTERS ---------------------------------
 */
 
-uint				Job::getStatus( void ) const
+job_status				Job::getStatus( void ) const
 {
 	return this->_status;
 }
@@ -418,6 +632,42 @@ const char*				Job::getRestartPolicyString( void ) const
 			break;
 		default:
 			LOG_CRITICAL(LOG_CATEGORY_JOB, "Invalid policy value '" + ntos(this->_restartpolicy) + "' for job '" + this->_name + "'.") 
+//TODO remove all ntos() call in all the code
+	}
+	return "unknown";
+}
+
+const char*				Job::getStatusString( void ) const
+{
+	switch (this->_status)
+	{	
+		case not_started:
+			return "not started";
+			break;
+		case starting:
+			return "starting";
+			break;
+		case running:
+			return "running";
+			break;
+		case stopped:
+			return "stopped";
+			break;
+		case suspended:
+			return "suspended";
+			break;
+		case incomplete:
+			return "incomplete";
+			break;
+		case exited:
+			return "exited";
+			break;
+		case terminated:
+			return "terminated";
+			break;
+		default:
+			LOG_CRITICAL(LOG_CATEGORY_JOB, "Invalid status value '" + ntos(this->_restartpolicy) + "' for job '" + this->_name + "'.") 
+//TODO remove all ntos() call in all the code
 	}
 	return "unknown";
 }

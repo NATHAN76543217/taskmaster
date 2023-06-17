@@ -10,9 +10,11 @@ enum job_policy {
 };
 
 enum job_status {
+	not_started,
 	starting,
 	running,
 	stopped,
+	suspended,
 	incomplete,
 	exited,
 	terminated

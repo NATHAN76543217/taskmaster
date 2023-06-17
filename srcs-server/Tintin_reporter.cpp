@@ -63,15 +63,10 @@ void				Tintin_reporter::operator()( void )
 
 	std::unique_lock<std::mutex> update_lock(this->_mutexUpdate);
 	
-	std::cerr << "Logger start." << std::endl;
+	// std::cerr << "Logger start." << std::endl;
+	// LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger start.");
 	// LOG_INFO(LOG_CATEGORY_THREAD, "Log thread - start - id: " << std::this_thread::get_id())
 	do {
-		{
-			std::lock_guard<std::mutex> lk(this->_internal_mutex);
-			if (this->_running == false)
-				break;
-		}
-		std::cout << "logger loop" << std::endl;
 		// update_lock.lock();
 		while (!this->_messageQueue.empty())
 		{
@@ -79,6 +74,12 @@ void				Tintin_reporter::operator()( void )
 			this->_log(msg.level, msg.category, msg.message);
 			this->_messageQueue.pop();
 		}
+		{
+			std::lock_guard<std::mutex> lk(this->_internal_mutex);
+			if (this->_running == false)
+				break;
+		}
+
 		this->_hasUpdate.wait(update_lock);
 	}
 	while (true);

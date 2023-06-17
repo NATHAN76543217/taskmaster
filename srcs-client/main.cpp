@@ -67,7 +67,7 @@ int main(int ac, char **av)
 
     #if LOG_CATEGORY_AUTO == false
         int err = 0;
-        err += Tintin_reporter::getLogManager("./client.log").addCategory(LOG_CATEGORY_DEFAULT);
+        err += Tintin_reporter::GetInstance("./client.log").addCategory(LOG_CATEGORY_DEFAULT);
         err += Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_INIT);
         err += Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_NETWORK);
         err += Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");

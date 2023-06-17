@@ -1,34 +1,4 @@
 #include "JobManager.hpp"
-/* Static methods definitions and static variables initalisation. */
-// std::atomic<JobManager*>	JobManager::jobManager_ ;
-//TODO I don't know why but JobManager is created twice
-// JobManager*	JobManager::GetInstance( void )
-// {
-//     /**
-//      * This is a safer way to create an instance. instance = new Singleton is
-//      * dangeruous in case two instance threads wants to access at the same time
-//      */
-//     if(jobManager_.load() == nullptr)
-// 	{
-// 		LOG_INFO(LOG_CATEGORY_THREAD, "Create a new jobManager in thread " << std::this_thread::get_id())
-//         jobManager_.store(new JobManager());
-// 		//REVIEW Is it smart to init JobLanager handlers here ? 
-// 		// jobManager_.load()->initSignalsJm();
-// 		// jobManager_->startThreadJM();
-//     }
-//     return jobManager_.load();
-// }
-
-// void	JobManager::DestroyInstance( void )
-// {
-// 	if(jobManager_.load() == nullptr)
-// 		return ;
-// 	jobManager_.load()->_stopThreadJM();
-// 	delete jobManager_.load();
-// 	jobManager_.store(nullptr);
-
-// }
-
 
 
 /*
@@ -41,6 +11,8 @@
 // 	//o << "Value = " << i.getValue();
 // 	return o;
 // }
+
+
 void			JobManager::operator()()
 {
 	std::cerr << "JobManager wait to start" << std::endl;
@@ -51,7 +23,7 @@ void			JobManager::operator()()
 	std::cerr << "JobManager start." << std::endl;
 
 	/* Init */
-	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - start - id: " << std::this_thread::get_id())
+	LOG_INFO(LOG_CATEGORY_THREAD, "Thread `JobManager` - start")
 	bool	tmpCycleUsefull = false;
 	std::unique_lock<std::mutex> lock(this->_internal_mutex);
 
@@ -61,8 +33,9 @@ void			JobManager::operator()()
 		LOG_DEBUG(LOG_CATEGORY_JM, "JobManager - Mutex released")
 		if (!this->_running)
 		{
-			LOG_DEBUG(LOG_CATEGORY_JM, "Marked as should_stop.")
-			tmpCycleUsefull = true;
+
+			LOG_CRITICAL(LOG_CATEGORY_JM, "JobManager stoped. (NOT SUPPOSED TO BE EXECUTED)")
+			tmpCycleUsefull = false;
 			break ;
 		}
 	
@@ -71,55 +44,63 @@ void			JobManager::operator()()
 			/* Update config */
 			LOG_INFO(LOG_CATEGORY_JM, "Updating config...")
 			tmpCycleUsefull = true;
+			this->_configChanged = false;
 			if (this->_updateConfig())
 			{
 				LOG_ERROR(LOG_CATEGORY_JM, "Fail to update config.")
 			}
+			else
+				LOG_INFO(LOG_CATEGORY_JM, "Config updated successfuly.")
 
 		}
 		
 		{
-			std::lock_guard<std::mutex> lk(this->_mutexChildlist);
-			tmpCycleUsefull = true;
-			for (std::vector<pid_t>::iterator it_pid = this->_changedChilds.begin(); it_pid != this->_changedChilds.end(); it_pid++)
-			{
-				LOG_INFO(LOG_CATEGORY_JM, "JobManager - main loop - Je sais que pid " << *it_pid << " est mort.")
-			}
+			/* Check here if jobs differ from their max state */
+			//TODO
 			
 		}
 
 		if (!tmpCycleUsefull)
-		{
-			LOG_CRITICAL(LOG_CATEGORY_JM, "Mutex released but nothing happen...")
-		}
+			LOG_CRITICAL(LOG_CATEGORY_JM, "Mutex released but nothing happen...") 
 		LOG_DEBUG(LOG_CATEGORY_JM, "JobManager - Wait")
 		this->_hasUpdate.wait(lock);
 	}
 	while (this->_running);
-	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - end - id: " << std::this_thread::get_id())
+	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - end ")
 }
 
 int			JobManager::_updateConfig( void )
 {
-
+	std::list<Job> 	tmp;
+	
+	std::cout << std::endl << "JobSize before config check = " << this->_runningjobs.size() << std::endl;
 	Taskmaster& TM = Taskmaster::GetInstance();
+
+	// std::lock_guard<std::mutex> lock(TM._internal_mutex);
+
+
 	/* Update the configuration */
 	for (std::list<Job>::const_iterator job = TM._joblist.begin(); job != TM._joblist.end(); job++)
 	{
 		/* find job in running list */
 		std::list<Job>::iterator rjob = this->_runningjobs.begin();
-		for (;
-			rjob != this->_runningjobs.end() && Job::Compare(*job, *rjob) != 0;
-			rjob++ )
+		for (; rjob != this->_runningjobs.end() ; rjob++ )
 		{
+			LOG_DEBUG(LOG_CATEGORY_CONFIG, "Compare service: " << job->getName() << " against " << rjob->getName() )
+			if (Job::Compare(*job, *rjob) == 0)
+			{
+				LOG_DEBUG(LOG_CATEGORY_CONFIG, "Match service: " << job->getName())
+				break ;
+			}
 		}
 		if (rjob == this->_runningjobs.end())
 		{
 			/* Not found */
 			/* A new job to start */
+			//TODO move this part outside this function
 			LOG_INFO(LOG_CATEGORY_JM, "Job '" << job->getName() << "' detected as a new job.")
-			this->_runningjobs.push_back(*job);
-			Job& newjob = this->_runningjobs.back();
+			tmp.push_back(*job);
+			Job & newjob = tmp.back();
 			if (newjob.getAutostart() == true)
 			{
 				LOG_DEBUG(LOG_CATEGORY_JM, "Job '" << job->getName() << "' start automatically.")				
@@ -133,6 +114,7 @@ int			JobManager::_updateConfig( void )
 			LOG_DEBUG(LOG_CATEGORY_JM, "Need to update job '" << rjob->getName() << "'. TO IMPLEMENT")
 		}
 	}
+	this->_runningjobs = tmp;
 	return EXIT_SUCCESS;
 }
 
@@ -149,16 +131,38 @@ int			JobManager::_updateConfig( void )
 // 	return EXIT_SUCCESS;
 // }
 
+std::list<Job>::iterator		JobManager::getJobByPid(pid_t pid)
+{
+	std::list<Job>::iterator it = this->_runningjobs.begin();
+	
+	while (it != this->_runningjobs.end())
+	{
+		if (it->hasPid(pid) == true)
+			break ;
+		it++;
+	}
+
+	return it;
+}
+
 void		JobManager::notifyChildDeath( pid_t pid, int stat)
 {
 	{
-		std::lock_guard<std::mutex> lock(this->_mutexChildlist);
-		this->_childChanged = true;
-		this->_changedChilds.push_back(pid);
+		std::lock_guard<std::mutex> lock(this->_internal_mutex);
+		std::list<Job>::iterator it = this->getJobByPid(pid);
+		if (it == this->getJobEnd())
+		{
+			//not found
+			LOG_CRITICAL(LOG_CATEGORY_JM, "Notify the death of a pid not found in JobManager")
+			return ;
+		}
+		it->setStatus(incomplete);
+		it->rmPid(pid);
 	}
 	this->_hasUpdate.notify_one();
 	(void) stat;
 }
+
 
 /*
 ** --------------------------------- ACCESSOR ---------------------------------
@@ -167,6 +171,15 @@ void		JobManager::notifyChildDeath( pid_t pid, int stat)
 
 void		JobManager::stop( void )
 {
+	/* Stop jobs before stopping JobManager */
+	for (std::list<Job>::iterator it = this->_runningjobs.begin(); it != this->_runningjobs.end(); it++)
+	{
+		LOG_INFO(LOG_CATEGORY_JM, "Gracefuly stopping job `" << it->getName() << "`.")
+		it->gracefullStop();
+	}
+	LOG_INFO(LOG_CATEGORY_JM, "All jobs stopped.")
+
+	/* Stop jobManager */
 	AThread<JobManager>::stop();
 	this->_hasUpdate.notify_one();
 }
@@ -181,6 +194,10 @@ void			JobManager::setConfigChanged( void )
 	this->_hasUpdate.notify_one();
 }
 
+std::list<Job>::iterator	JobManager::getJobEnd( void )
+{
+	return this->_runningjobs.end();
+}
 
 /*
 ** --------------------------------- SIGNALS ---------------------------------

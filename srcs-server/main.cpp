@@ -27,8 +27,10 @@
 //TODO when change job._nbprocs (setnbprocs) just spawn od unspawn the right number of processes without touching the good ones
 //TODO add struct job_worker that contain the pid and status of child processes
 //DONE implement signal handler as a separate thread 
-//TODO transform all current code in thread-safe code
+//DONE transform all current code in thread-safe code
 //TODO implement restart policy for jobs
+//TODO handle child processes at end
+//TODO transforme LOG_XLEVEL to not call the object logger
 
 class ClientData
 {

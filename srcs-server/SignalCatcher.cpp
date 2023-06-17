@@ -53,7 +53,6 @@ void			SignalCatcher::operator()()
 			case SIGHUP:
 				LOG_INFO(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "SIGHUP - Reload config.")
 				Taskmaster::GetInstance().reloadConfigFile();
-				JobManager::GetInstance().setConfigChanged();
 
 			break;
 			case SIGCHLD:

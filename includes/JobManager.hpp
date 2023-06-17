@@ -16,11 +16,9 @@ class JobManager : public virtual  AThread<JobManager>
 	/* Private variables */
 	private:
 		std::list<Job>				_runningjobs;
-		std::mutex					_mutexChildlist;
 		std::vector<pid_t>			_changedChilds;
 		std::condition_variable		_hasUpdate;
 		// bool						_somethingChanged;
-		bool						_childChanged;//TODO remove this variable
 		bool						_configChanged;
 
 	protected:
@@ -29,9 +27,7 @@ class JobManager : public virtual  AThread<JobManager>
 		JobManager(const std::string & name = "JobManager") :
 			AThread<JobManager>(*this, name),
 			_hasUpdate(),
-			// _somethingChanged(false),
-			_childChanged(false),
-			_configChanged(false)
+			_configChanged(true)
 		{
 			LOG_DEBUG(LOG_CATEGORY_THREAD, "JobCatcher - Constructor")
 		};
@@ -53,6 +49,9 @@ class JobManager : public virtual  AThread<JobManager>
 	void	operator()();
 
 	/* JobManager methods */
+	
+	std::list<Job>::iterator	getJobEnd( void );
+	std::list<Job>::iterator	getJobByPid(pid_t pid);
 
 	void			setConfigChanged( void );
 	void			stop( void );

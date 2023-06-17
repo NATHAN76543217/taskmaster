@@ -338,6 +338,7 @@ int			Taskmaster::_parseConfigPrograms( void )
 		LOG_INFO(LOG_CATEGORY_CONFIG, "New job '" + ntos(it->first) + "' loaded.")
 		newJoblist.push_back(job);
 	}
+	
 	this->_joblist = newJoblist;
 	return EXIT_SUCCESS;
 }
@@ -392,10 +393,13 @@ int			Taskmaster::loadConfigFile(const std::string & path)
 
 int			Taskmaster::reloadConfigFile( void )
 {
+	std::lock_guard<std::mutex> lock(this->_internal_mutex);
+
 	if (this->_config.reloadConfigFile())
 	{
 		return EXIT_FAILURE;
 	}
+	JobManager::GetInstance().setConfigChanged();
 	return EXIT_SUCCESS;
 }
 
@@ -418,7 +422,7 @@ void		Taskmaster::operator()( void )
 		// LOG_ERROR(LOG_CATEGORY_NETWORK, "Put all server stuf here")
 		// LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
 
-		std::this_thread::sleep_for(std::chrono::seconds(5));
+		std::this_thread::sleep_for(std::chrono::seconds(3));
 		
 		{
 			std::lock_guard<std::mutex> lk(this->_internal_mutex);

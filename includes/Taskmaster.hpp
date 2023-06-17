@@ -7,7 +7,7 @@
 # include <cstdio>
 # include <unistd.h>
 # include <fcntl.h>
-# include <signal.h>
+# include <csignal>
 
 # include "yaml-cpp/yaml.h"
 # include "tm_values.hpp"

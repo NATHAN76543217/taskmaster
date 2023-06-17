@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 # include <cstdlib>
 # include <vector>
+# include <thread>
 # include "yaml-cpp/yaml.h"
 
 class Job;
@@ -17,46 +18,16 @@ class Job;
 # include "tm_values.hpp"
 # include "Tintin_reporter.hpp"
 
-# define JOB_STATUS_NOTSTARTED	0
-# define JOB_STATUS_STOPED		1
-# define JOB_STATUS_STARTING	2
-# define JOB_STATUS_INCOMPLETE	3
-# define JOB_STATUS_RUNNING		10
-/* If you add a JOB_STATUS define */
-/* Update Job::setSatus function with the highest JOB_STATUS define */
-
 class Job
 {
 
 	public:
 
-		static int			Compare( const Job & j1, const Job & j2)	
-		{
-			if (j1.getName() != j2.getName())
-			{
-				if ((j1.getCmd() != j2.getCmd())
-				|| (j1.getStatus() != j2.getStatus())
-				|| (j1.getCmd() != j2.getCmd())
-				|| (j1.getNbProcs() != j2.getNbProcs())
-				|| (j1.getWorkingdir() != j2.getWorkingdir())
-				|| (j1.getAutostart() != j2.getAutostart())
-				|| (j1.getRestartPolicy() != j2.getRestartPolicy())
-				|| (j1.getNbRetry() != j2.getNbRetry())
-				|| (j1.getExitCodes() != j2.getExitCodes())
-				|| (j1.getStarttime() != j2.getStarttime())
-				|| (j1.getStoptime() != j2.getStoptime())
-				|| (j1.getStopSignal() != j2.getStopSignal())
-				|| (j1.getStdout() != j2.getStdout())
-				|| (j1.getStderr() != j2.getStderr())
-				|| (j1.getEnvfromparent() != j2.getEnvfromparent())
-				|| (j1.getEnv() != j2.getEnv())
-				)
-					return 1;
-				return 0;
-			}
-			
-			return -1;
-		}
+		/*
+			Should exclude status variable from this check
+		*/
+		static int			Compare( const Job & j1, const Job & j2);	
+
 
 		class JobConfigException : std::exception
 		{
@@ -69,11 +40,22 @@ class Job
 
 		Job &		operator=( Job const & rhs );
 		
+
+		bool			hasPid( pid_t pid );
+		bool			rmPid( pid_t pid );
 		int				spawnProcess( void );
 		void			resetDefault( void );
 		int				start( void );
-		uint			getStatus( void ) const;
-		void			setStatus( uint status );
+		int				terminate( void );
+		int				resume( void );
+		int				suspend( void );
+		int				stop( void );
+		int				kill( void );
+		int				kill_pid( pid_t pid );
+		int				gracefullStop( void );
+
+		job_status		getStatus( void ) const;
+		void			setStatus( job_status status );
 		std::vector< std::vector<char> >    splitQuotes(const std::string &str) const;
 
 		void			setName(const std::string & name);
@@ -99,8 +81,9 @@ class Job
 		uint				getUmask( void ) const;
 		const std::string&	getWorkingdir( void ) const;
 		bool				getAutostart( void ) const;
-		job_policy				getRestartPolicy( void ) const;
+		job_policy			getRestartPolicy( void ) const;
 		const char*			getRestartPolicyString( void ) const;
+		const char*			getStatusString( void ) const;
 		uint				getNbRetry( void ) const;
 		const std::vector<uint>		&getExitCodes( void ) const;
 		uint				getStarttime( void ) const;
@@ -113,8 +96,9 @@ class Job
 
 	private:
 		bool				_shouldUpdate;
-		uint				_status;
-		std::vector<int>	_pid;
+		job_status			_status;
+		bool				_complete;
+		std::set<int>		_pid;
 
 		std::string			_name;
 		std::string 		_cmd;
@@ -133,14 +117,9 @@ class Job
 		bool				_envfromparent;
 		std::map<std::string, std::string> _env;
 
-		//demander a luca si on fait une architecture avec les jobs qui tournent independament sur des thread ou processus differents et on vient hot-update leur version de la config pour changer leur behavior
-
-		// dataAssesment() on each data modification
-		// a status variable 
 	friend class Taskmaster;
 };
 
 
-std::ostream &			operator<<( std::ostream & o, Job const & i );
 
 #endif /* ************************************************************* JOB_H */
