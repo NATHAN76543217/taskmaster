@@ -75,6 +75,7 @@ class Job
 		void			setEnvfromparent(const bool pass);
 		void			addEnv(const std::string & key, const std::string & value);
 
+		void			_setpid( const std::set<pid_t> & pid );
 		const std::string&	getName( void ) const;
 		const std::string&	getCmd( void ) const;
 		uint				getNbProcs( void ) const;
@@ -94,11 +95,13 @@ class Job
 		bool				getEnvfromparent( void ) const;
 		const std::map<std::string, std::string>&	getEnv( void ) const;
 
+		const std::set<pid_t>&		_getpid( void ) const;
+
 	private:
 		bool				_shouldUpdate;
 		job_status			_status;
 		bool				_complete;
-		std::set<int>		_pid;
+		std::set<pid_t>		_pid;
 
 		std::string			_name;
 		std::string 		_cmd;

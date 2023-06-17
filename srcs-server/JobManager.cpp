@@ -56,7 +56,13 @@ void			JobManager::operator()()
 		
 		{
 			/* Check here if jobs differ from their max state */
-			//TODO
+			for (std::list<Job>::iterator it = this->_runningjobs.begin(); it != this->_runningjobs.end(); it++ )
+			{
+				if (it->getStatus() == incomplete)
+				{
+					/* Need update */
+				}
+			}
 			
 		}
 
@@ -82,8 +88,8 @@ int			JobManager::_updateConfig( void )
 	/* Update the configuration */
 	for (std::list<Job>::const_iterator job = TM._joblist.begin(); job != TM._joblist.end(); job++)
 	{
-		/* find job in running list */
 		std::list<Job>::iterator rjob = this->_runningjobs.begin();
+		/* find if job is in the running list */
 		for (; rjob != this->_runningjobs.end() ; rjob++ )
 		{
 			LOG_DEBUG(LOG_CATEGORY_CONFIG, "Compare service: " << job->getName() << " against " << rjob->getName() )
@@ -112,8 +118,34 @@ int			JobManager::_updateConfig( void )
 		{
 			/* Concern a started job */
 			LOG_DEBUG(LOG_CATEGORY_JM, "Need to update job '" << rjob->getName() << "'. TO IMPLEMENT")
+			tmp.push_back(*job);
+			Job & changedJob = tmp.back();
+			changedJob.setStatus(incomplete);
+			changedJob._setpid(rjob->_getpid());
 		}
 	}
+	/* Remove job not found in new config */
+	bool found = false;		
+	for (std::list<Job>::iterator oldjob = this->_runningjobs.begin(); oldjob != this->_runningjobs.end(); oldjob++)
+	{
+		std::list<Job>::const_iterator newjob = TM._joblist.begin();
+	
+		/* find if oldjob is in the new list */
+		for (; newjob != TM._joblist.end() ; newjob++ )
+		{
+			if (newjob->getName().compare(oldjob->getName()) == 0)
+				found = true;
+		}
+		if (found == false)
+		{
+			if (oldjob->gracefullStop() == EXIT_SUCCESS)
+				LOG_INFO(LOG_CATEGORY_JM, "Gracefuly stop job `" << oldjob->getName() << "`.")
+			else
+				LOG_ERROR(LOG_CATEGORY_JM, "Failed to gracefuly stop job `" << oldjob->getName() << "`.")
+		}
+		found = false;
+	}
+	
 	this->_runningjobs = tmp;
 	return EXIT_SUCCESS;
 }

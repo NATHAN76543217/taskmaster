@@ -572,6 +572,11 @@ void			Job::addEnv(const std::string & key, const std::string & value)
 	this->_env[key] = value;
 }
 
+void			Job::_setpid( const std::set<pid_t> & pid)
+{
+	this->_pid = pid;
+}
+
 /*
 ** --------------------------------- GETTERS ---------------------------------
 */
@@ -724,6 +729,15 @@ const std::map<std::string, std::string>&	Job::getEnv( void ) const
 {
 	return this->_env;
 }
+
+
+
+const std::set<pid_t>&			Job::_getpid( void ) const
+{
+	return this->_pid;
+}
+
+
 
 std::vector< std::vector<char> >    Job::splitQuotes(const std::string &str) const
 {
