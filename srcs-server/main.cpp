@@ -31,6 +31,9 @@
 //TODO implement restart policy for jobs
 //TODO handle child processes at end
 //TODO transforme LOG_XLEVEL to not call the object logger
+//TODO wait all child are waitpid'd before stoping signal thread
+//TODO Move timestamp creation in a way to have the timestamp of emiting the message and not the timestamp of writing.
+//REVIEW Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
 
 class ClientData
 {
@@ -106,15 +109,18 @@ int main(int ac, char** av, const char** env)
 
 	Taskmaster &TM = Taskmaster::CreateInstance("Taskmaster");
 
-		std::cerr << "Initialization BEFORE." << std::endl;
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "Before Initialization.")
+	std::cerr << "Before Initialization." << std::endl;
+
 
 	if (TM.initialization(env) == EXIT_FAILURE)
 	{
+		LOG_ERROR(LOG_CATEGORY_INIT, "Initialization failed.")
 		std::cerr << "Initialization failed." << std::endl;
 		Taskmaster::DestroyInstance();
 		return EXIT_FAILURE;
 	}
-	std::cerr << "Initialization AFTER." << std::endl;
+	LOG_INFO(LOG_CATEGORY_MAIN, "Initialization done.")
 
 	// Display all jobs
 	// std::cout << "=== JOBS ===" << std::endl;
@@ -126,13 +132,14 @@ int main(int ac, char** av, const char** env)
 	SignalCatcher::GetInstance().start();
 	JobManager::GetInstance().start();
 	TM.start();
+
+	LOG_INFO(LOG_CATEGORY_MAIN, "Wait taskmaster's end.")
 	std::cerr << "main start to wait" << std::endl;
 	TM.waitEnd();
 	std::cerr << "main start final part" << std::endl;
+	LOG_INFO(LOG_CATEGORY_MAIN, "Wake - Ready to quit")
 
-	LOG_DEBUG(LOG_CATEGORY_DEFAULT, "Main thread - exit main loop");
-	LOG_INFO(LOG_CATEGORY_INIT, "Quit program.")
-
+	LOG_DEBUG(LOG_CATEGORY_MAIN, "Destroying Taskmaster's instance.")
 	Taskmaster::DestroyInstance();
 
 	freeLockFile(TM_DEF_LOCKPATH);

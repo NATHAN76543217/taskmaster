@@ -130,7 +130,6 @@ class AThread
 		{
 			if(instance_.load() == nullptr)
 				return ;
-			// LOG_INFO(LOG_CATEGORY_THREAD, "Destroying <" << instance_.load()->getName() << "> on thread : " << std::this_thread::get_id())
 			instance_.load()->stop();
 			instance_.load()->_thread.join();
 			delete instance_.load();

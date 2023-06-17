@@ -35,7 +35,6 @@ Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 
 void			Taskmaster::DestroyInstance( void )
 {
-	std::cout << "Destroy TM" << std::endl; 
 	JobManager::DestroyInstance();
 	Tintin_reporter::DestroyInstance();
 	SignalCatcher::DestroyInstance();
@@ -46,9 +45,9 @@ void			Taskmaster::DestroyInstance( void )
 
 int			Taskmaster::initialization( const char** env )
 {
-	std::cerr << "TM Before init lock" << std::endl;
+	LOG_INFO(LOG_CATEGORY_INIT, "Wait to initialize taskmaster")
 	std::unique_lock<std::mutex> lock(this->_internal_mutex);
-	std::cerr << "TM After init lock" << std::endl;
+	LOG_INFO(LOG_CATEGORY_INIT, "Initialization start.")
 
 	this->setEnv(env);
 
@@ -57,15 +56,11 @@ int			Taskmaster::initialization( const char** env )
 	if (this->loadConfigFile(TM_DEF_CONFIGPATH))
 	{
 		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
-		//REVIEW call to exit() here? serioulys? 
- 		// exit(EXIT_FAILURE);
 		return EXIT_FAILURE;
 	}
 
 
 	std::cerr << "TM END BEFORE UNCLOCK init lock" << std::endl;
-
-	// lock.unlock();
 	std::cerr << "TM END init lock" << std::endl;
 
 	return EXIT_SUCCESS;

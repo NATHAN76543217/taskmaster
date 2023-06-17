@@ -112,8 +112,8 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		std::string								_defaultCategory;
 		uint									_timestamp_format;
 		uint									_color_enabled;
-		std::mutex								_mutexUpdate;
-		std::condition_variable					_hasUpdate;
+		static std::condition_variable			_hasUpdate;
+		static std::mutex						_mutexUpdate;
 		static std::queue<log_message>			_messageQueue;
 
 	protected:
@@ -134,15 +134,11 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		static	void			log(uint level, const char* category, const std::string & message)
 		{
-			Tintin_reporter& logger = Tintin_reporter::GetInstance();
-			// {
-			// 	std::lock_guard<std::mutex> lock(logger._internal_mutex);
-			// }TODO
 			{
-				std::lock_guard<std::mutex> lock(logger._mutexUpdate);
-				logger._messageQueue.push(log_message(level, category, "", message ));
+				std::lock_guard<std::mutex> lock(Tintin_reporter::_mutexUpdate);
+				Tintin_reporter::_messageQueue.push(log_message(level, category, "", message ));
 			}
-			logger._hasUpdate.notify_all();
+			Tintin_reporter::_hasUpdate.notify_all();
 		}
 
 		void				operator()( void );

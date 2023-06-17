@@ -2,7 +2,12 @@
 //TODO Improve verbose: say 'new' when new category and say 'set' when relink category (do the same for files)
 //TODO optimize between addCategpry and addDefaultCategory
 
-std::queue<Tintin_reporter::log_message> Tintin_reporter::_messageQueue = std::queue<Tintin_reporter::log_message>();
+/*
+** ------------------------------- Static VAR init --------------------------------
+*/
+std::condition_variable						Tintin_reporter::_hasUpdate;
+std::mutex									Tintin_reporter::_mutexUpdate;
+std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::queue<Tintin_reporter::log_message>();
 
 
 /*
@@ -13,9 +18,7 @@ Tintin_reporter::Tintin_reporter(const std::string &defaultFile) :
 																AThread<Tintin_reporter>(*this, defaultFile),
 																_defaultCategory(LOG_CATEGORY_DEFAULT),
 																_timestamp_format(0),
-																_color_enabled(false),
-																_mutexUpdate(),
-																_hasUpdate()
+																_color_enabled(false)
 {
 	this->addDefaultCategory(defaultFile);
 }
@@ -61,18 +64,18 @@ void				Tintin_reporter::operator()( void )
 		this->_ready.wait(lock);
 	}
 
-	std::unique_lock<std::mutex> update_lock(this->_mutexUpdate);
+	std::unique_lock<std::mutex> update_lock(Tintin_reporter::_mutexUpdate);
 	
 	// std::cerr << "Logger start." << std::endl;
 	// LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger start.");
 	// LOG_INFO(LOG_CATEGORY_THREAD, "Log thread - start - id: " << std::this_thread::get_id())
 	do {
 		// update_lock.lock();
-		while (!this->_messageQueue.empty())
+		while (!Tintin_reporter::_messageQueue.empty())
 		{
 			log_message&	msg = this->_messageQueue.front();
 			this->_log(msg.level, msg.category, msg.message);
-			this->_messageQueue.pop();
+			Tintin_reporter::_messageQueue.pop();
 		}
 		{
 			std::lock_guard<std::mutex> lk(this->_internal_mutex);
@@ -80,7 +83,7 @@ void				Tintin_reporter::operator()( void )
 				break;
 		}
 
-		this->_hasUpdate.wait(update_lock);
+		Tintin_reporter::_hasUpdate.wait(update_lock);
 	}
 	while (true);
 	// LOG_INFO(LOG_CATEGORY_THREAD, "Log thread - end - id: " << std::this_thread::get_id())
@@ -117,7 +120,7 @@ std::ostream &operator<<(std::ostream &o, Tintin_reporter const &i)
 void				Tintin_reporter::stop( void )
 {
 	AThread<Tintin_reporter>::stop();
-	this->_hasUpdate.notify_all();
+	Tintin_reporter::_hasUpdate.notify_all();
 	return ;
 }
 
