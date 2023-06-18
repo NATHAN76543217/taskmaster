@@ -24,6 +24,7 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		Config					_config;
 		/* Config values */
 		
+		std::string		_workingdir;
 		std::string		_lockpath;
 		std::string		_logpath;
 		uint			_max_connections;
@@ -35,13 +36,26 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		/* Constructor */
 		Taskmaster(const std::string & name = "Taskmaster") :
 			AThread(*this, name),
+			_workingdir(""),
 			_lockpath(TM_DEF_LOCKPATH),
 			_logpath(TM_DEF_LOGPATH),
 			_max_connections(TM_DEF_MAX_CONNECTIONS),
 			_logcolor(TM_DEF_LOGCOLOR)
 		{
+			char * pwd = NULL;
+			pwd = ::getcwd(NULL, 0);
+			if (pwd == NULL)
+			{
+				LOG_ERROR(LOG_CATEGORY_DEFAULT, "Failed to `getcwd` : " << strerror(errno))
+			}
+			else
+			{
+				this->_workingdir.assign(pwd);
+				free(pwd);
+			}
 			this->_parentEnv.store(nullptr);
 		}
+
 		/* Destructor */
 		~Taskmaster() {}
 
@@ -67,7 +81,8 @@ class Taskmaster : public virtual AThread<Taskmaster>
 
 		const char** getEnv( void ) const;
 		void		setEnv( const char **env);
-
+		void		setWorkingdir( const std::string & str);
+		const std::string&		getWorkingdir( void ) const;
 		int			loadConfigFile(const std::string & path);
 		int			reloadConfigFile( void );
 		

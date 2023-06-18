@@ -217,19 +217,23 @@ int				Job::spawnProcess( void )
 	}
 	else if (pid == 0)
 	{
-		//child
-		// REVIEWTake mutex
+		/* child process */
+
 		/* Set umask */
 		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] umask: " << umask(this->getUmask()) << " -> " << this->getUmask()) 
 	
 		/* Set cwd */
-		if (!this->_workingdir.empty())
+		if (this->_workingdir.empty())
+			LOG_CRITICAL(LOG_CATEGORY_JOB, "Job's pwd shouldn't be empty.")
+		else
 		{
 			if (chdir(this->getWorkingdir().c_str()) == -1)
-			{
 				LOG_ERROR(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Failed to change working direcotry : " << strerror(errno))
-			}
+			else
+				LOG_DEBUG(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Set `workingdir` to `" << this->_workingdir << "`.")
 		}
+
+		/* Set environnement */
 		std::vector<std::vector<char>> env_vector = this->splitQuotes(this->_cmd);
 
 		if (this->_envfromparent == true)
@@ -378,19 +382,17 @@ int				Job::resume( void )
 
 int				Job::start( void )
 {
-	uint i = 0;
-	
 	LOG_DEBUG(LOG_CATEGORY_JOB,  "[" << this->_name << "] start.")
-	this->_status = starting;
-	//REVIEW make a for loop
+	
 	this->_complete = true;
-	while (i < this->_nbprocs )
+	this->_status = starting;
+
+	for ( uint i = 0; i < this->_nbprocs; i++ )
 	{
 		if (this->spawnProcess() == EXIT_FAILURE)
 		{
 			this->_complete = false;
 		}
-		i++;
 	}
 	/* TODO Check restart policy here */
 	/* Check if everything is running smoothly */

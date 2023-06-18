@@ -81,7 +81,6 @@ class AThread
 		{
 			std::unique_lock<std::mutex> lock(this->_stop_mutex);
 			this->_stop.wait(lock);
-			std::cerr << "out wait" << std::endl;
 			return ;
 		}
 

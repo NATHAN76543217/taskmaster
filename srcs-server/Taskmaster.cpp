@@ -127,13 +127,9 @@ int			Taskmaster::_parseConfigPrograms( void )
 		}
 
 		if (it->second[TM_FIELD_WORKINGDIR])
-		{
 			job.setWorkingdir(it->second[TM_FIELD_WORKINGDIR].as<std::string>());
-		}
 		else
-		{
-			// TODO set pwd equal to main pwd
-		}
+			job.setWorkingdir(this->_workingdir);
 
 		try {
 			if (it->second[TM_FIELD_NBPROCS])
@@ -345,6 +341,10 @@ int			Taskmaster::_parseConfigServer( void )
 		this->_logcolor = this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR].as<bool>();
 		Tintin_reporter::GetInstance().setColor(this->_logcolor);
 	}
+	if (this->_config[TM_FIELD_SERVER][TM_FIELD_WORKINGDIR])
+	{
+		this->setWorkingdir(this->_config[TM_FIELD_SERVER][TM_FIELD_WORKINGDIR].as<std::string>());
+	}
 	return EXIT_SUCCESS;
 }
 
@@ -356,6 +356,22 @@ const char**		Taskmaster::getEnv( void ) const
 void		Taskmaster::setEnv( const char ** env)
 {
 	this->_parentEnv.store(env);
+}
+
+void		Taskmaster::setWorkingdir( const std::string & path)
+{
+	if (chdir(path.c_str()))
+	{
+		LOG_ERROR(LOG_CATEGORY_CONFIG, "Failed to `chdir` : " << strerror(errno))
+		return ;
+	}
+	LOG_INFO(LOG_CATEGORY_CONFIG, "Workingdir set to `" << path.c_str() << "`.")
+	this->_workingdir = path;
+}
+
+const std::string&		Taskmaster::getWorkingdir( void ) const
+{
+	return this->_workingdir;
 }
 
 int			Taskmaster::loadConfigFile(const std::string & path)
