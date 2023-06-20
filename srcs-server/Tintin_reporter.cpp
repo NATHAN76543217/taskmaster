@@ -17,10 +17,12 @@ std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::q
 Tintin_reporter::Tintin_reporter(const std::string &defaultFile) : 
 																AThread<Tintin_reporter>(*this, defaultFile),
 																_defaultCategory(LOG_CATEGORY_DEFAULT),
-																_timestamp_format(0),
+																_timestamp_format(LOG_TIMESTAMP_CURRENT),
+																_starttime(),
 																_color_enabled(false)
 {
 	this->addDefaultCategory(defaultFile);
+	this->_starttime = CronType::now();
 }
 
 /*
@@ -52,29 +54,30 @@ Tintin_reporter::~Tintin_reporter()
 	}
 }
 
+
 /*
 ** --------------------------------- OVERLOAD ---------------------------------
 */
 
 void				Tintin_reporter::operator()( void )
 {
-	std::cerr << "Logger wait to start" << std::endl;
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger constructed - wait to start");
 	{
 		std::unique_lock<std::mutex> lock(this->_internal_mutex);
 		this->_ready.wait(lock);
 	}
 
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger thread start.");
+
 	std::unique_lock<std::mutex> update_lock(Tintin_reporter::_mutexUpdate);
+	std::unique_lock<std::mutex> intern_lock(Tintin_reporter::_internal_mutex);
 	
-	// std::cerr << "Logger start." << std::endl;
-	// LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger start.");
-	// LOG_INFO(LOG_CATEGORY_THREAD, "Log thread - start - id: " << std::this_thread::get_id())
+	intern_lock.unlock();
 	do {
-		// update_lock.lock();
+		intern_lock.lock();
 		while (!Tintin_reporter::_messageQueue.empty())
 		{
-			log_message&	msg = this->_messageQueue.front();
-			this->_log(msg.level, msg.category, msg.message);
+			this->_log(this->_messageQueue.front());
 			Tintin_reporter::_messageQueue.pop();
 		}
 		{
@@ -82,13 +85,13 @@ void				Tintin_reporter::operator()( void )
 			if (this->_running == false)
 				break;
 		}
-
+		intern_lock.unlock();
 		Tintin_reporter::_hasUpdate.wait(update_lock);
 	}
 	while (true);
-	// LOG_INFO(LOG_CATEGORY_THREAD, "Log thread - end - id: " << std::this_thread::get_id())
-	std::cerr << "Logger end." << std::endl;
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger thread end.")
 }
+
 
 std::ostream &operator<<(std::ostream &o, Tintin_reporter const &i)
 {
@@ -273,93 +276,159 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 
 
 
-void Tintin_reporter::_log(uint level, const std::string &categoryName, const std::string &message)
+
+/*
+	This function is not thread-safe.
+	LOG_TIMESTAMP_CURRENT	: Return the standard timestamp.
+	LOg_TIMESTAMP_ELAPSED	: Return the timestamp of the time elapsed since the logger start.
+	LOg_TIMESTAMP_UTC		: Return the timestamp int the UTC time formart.
+*/
+std::string			Tintin_reporter::getTimestampStr(const CronType::time_point & timestamp) const
 {
 
-	std::lock_guard<std::mutex> lock(this->_internal_mutex);
+	std::stringstream ss;
 
-	std::string active_category = categoryName;
+	if (this->_color_enabled)
+		ss << std::right << std::setfill('0') << "[" << LOG_TIMESTAMP_COLOR;
+	else
+		ss << std::right << std::setfill('0') << "[";
 
-#if LOG_CATEGORY_AUTO == true
-
-	/* If category don't exist : Create a new category */
-	if (this->_categories.find(categoryName) == this->_categories.end() && this->addCategory(categoryName) == EXIT_FAILURE)
+	if (this->_timestamp_format == LOG_TIMESTAMP_UTC)
 	{
-		LOG_CRITICAL(LOG_CATEGORY_LOGGER, "Failed to add category '" + categoryName + "' !")
-		active_category = this->_defaultCategory;
+		char timeStringUTC[sizeof("yyyy-mm-dd hh:mm:ss")];
+		std::time_t date = CronType::to_time_t(timestamp);
+		// std::strftime(timeStringUTC, sizeof(timeStringUTC), "%FT%TZ", std::gmtime(&date));
+		timeStringUTC[std::strftime(timeStringUTC, sizeof(timeStringUTC), "%F %T", std::gmtime(&date))] = '\0';
+		ss << timeStringUTC;
 	}
-#else
-	/* If category don't exist : Use default category */
-	if (this->_categories.find(categoryName) == this->_categories.end())
+	else
 	{
-		// LOG_WARN(LOG_CATEGORY_LOGGER, "Use of unknown category '" + categoryName + "'.")
-		active_category = this->_defaultCategory;
-	}
-#endif
+		int ms		= 0;
+		int sec		= 0;
+		int min		= 0;
+		int hours	= 0;
+		int days	= 0;
 
-	switch (level)
-	{
-	case LOG_LEVEL_CRITICAL:
-		this->_log_critical(active_category, message);
-		break;
-	case LOG_LEVEL_ERROR:
-		this->_log_error(active_category, message);
-		break;
-	case LOG_LEVEL_WARNING:
-		this->_log_warning(active_category, message);
-		break;
-	case LOG_LEVEL_INFO:
-		this->_log_info(active_category, message);
-		break;
-	case LOG_LEVEL_DEBUG:
-	default:
-		this->_log_debug(active_category, message);
-		break;
+		if (this->_timestamp_format == LOG_TIMESTAMP_CURRENT)
+		{
+			char datestr[sizeof("dd-mm-yyyy")];
+			std::time_t	tmpTime = CronType::to_time_t(timestamp);
+			std::tm*	local = std::localtime(&tmpTime);
+		
+			datestr[strftime(datestr, sizeof(datestr), "%d-%m-%Y", local)] = '\0';
+			
+			long long time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(timestamp.time_since_epoch()).count();
+			ms = time_ms % 1000;
+			sec = (time_ms / 1000) % 60;
+			min =  (time_ms / 60000 ) % 60;
+			hours = ((time_ms / 3600000 ) - LOG_TIMESTAMP_SUMMERTIME) % 24;
+
+			ss << datestr << " ";
+			ss << std::setw(2) << hours << ":" << std::setw(2) << min << ":" << std::setw(2) << sec << ":" << std::setw(3) << ms;
+		}
+		else if (this->_timestamp_format == LOG_TIMESTAMP_ELAPSED)
+		{
+			long long elapsed_ms	= std::chrono::duration_cast<std::chrono::milliseconds>((timestamp - this->_starttime)).count();
+			long long elapsed_hours = std::chrono::duration_cast<std::chrono::hours>((timestamp - this->_starttime)).count();
+			ms		= elapsed_ms % 1000;
+			sec		= (elapsed_ms / 1000) % 60;
+			min		=  (elapsed_ms / 60000 ) % 60;
+			hours	= elapsed_hours % 24;
+			days	= (elapsed_hours / 24);
+			ss << std::setw(2) << days << ":" << std::setw(2) << hours << ":";
+			ss << std::setw(2) << min  << ":" << std::setw(2) << sec << ":" << std::setw(3) << ms;	
+		}
+		else
+			LOG_CRITICAL(LOG_CATEGORY_LOGGER, "Timestamp format not implemented.")
 	}
+	if (this->_color_enabled)
+		ss << RESET_ANSI << "]";
+	else
+		ss << "]";
+	return ss.str();
 }
 
 /*
 ** --------------------------------- log methods ---------------------------------
 */
 
-void Tintin_reporter::_log_debug(const std::string &category, const std::string &message)
+/*
+	This method is not thtread-safe.
+*/
+void Tintin_reporter::_log(const log_message & message)
 {
-	if (this->_color_enabled)
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_DEBUG << message << RESET_ANSI << std::endl;
-	else
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_DEBUG_NOCOLOR << message << RESET_ANSI << std::endl;
-}
+	std::string active_category = message.category;
 
-void Tintin_reporter::_log_info(const std::string &category, const std::string &message)
-{
-	if (this->_color_enabled)
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_INFO << message << RESET_ANSI << std::endl;
-	else
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_INFO_NOCOLOR<< message << RESET_ANSI << std::endl;
-}
+#if LOG_CATEGORY_AUTO == true
 
-void Tintin_reporter::_log_warning(const std::string &category, const std::string &message)
-{
-	if (this->_color_enabled)
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_WARNING << message << RESET_ANSI << std::endl;
-	else
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_WARNING_NOCOLOR << message << RESET_ANSI << std::endl;
-}
+	/* If category don't exist : Create a new category */
+	if (this->_categories.find(active_category) == this->_categories.end() && this->addCategory(active_category) == EXIT_FAILURE)
+	{
+		LOG_CRITICAL(LOG_CATEGORY_LOGGER, "Failed to add category '" + active_category + "' !")
+		active_category = this->_defaultCategory;
+	}
+#else
+	/* If category don't exist : Use default category */
+	if (this->_categories.find(active_category) == this->_categories.end())
+	{
+		// LOG_WARN(LOG_CATEGORY_LOGGER, "Use of unknown category '" + categoryName + "'.")
+		active_category = this->_defaultCategory;
+	}
+#endif
 
-void Tintin_reporter::_log_error(const std::string &category, const std::string &message)
-{
-	if (this->_color_enabled)
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_ERROR << message << RESET_ANSI << std::endl;
-	else
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_ERROR_NOCOLOR<< message << RESET_ANSI << std::endl;
-}
+	const char* levelPrefix = NULL;
 
-void Tintin_reporter::_log_critical(const std::string &category, const std::string &message)
-{
 	if (this->_color_enabled)
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_CRITICAL << message << RESET_ANSI << std::endl;
+	{
+		switch (message.level)
+		{
+			case LOG_LEVEL_CRITICAL:
+				levelPrefix = LOG_LEVEL_PREFIX_CRITICAL;
+				break;
+			case LOG_LEVEL_ERROR:
+				levelPrefix = LOG_LEVEL_PREFIX_ERROR;
+				break;
+			case LOG_LEVEL_WARNING:
+				levelPrefix = LOG_LEVEL_PREFIX_WARNING;
+				break;
+			case LOG_LEVEL_INFO:
+				levelPrefix = LOG_LEVEL_PREFIX_INFO;
+				break;
+			case LOG_LEVEL_DEBUG:
+			default:
+				levelPrefix = LOG_LEVEL_PREFIX_DEBUG;
+		}
+	}
 	else
-		this->_opened_files.at(this->_categories.at(category).filename).output << this->_getLogHead(category) << LOG_LEVEL_PREFIX_CRITICAL_NOCOLOR << message << RESET_ANSI << std::endl;
+	{
+		switch (message.level)
+		{
+			case LOG_LEVEL_CRITICAL:
+				levelPrefix = LOG_LEVEL_PREFIX_CRITICAL_NOCOLOR;
+				break;
+			case LOG_LEVEL_ERROR:
+				levelPrefix = LOG_LEVEL_PREFIX_ERROR_NOCOLOR;
+				break;
+			case LOG_LEVEL_WARNING:
+				levelPrefix = LOG_LEVEL_PREFIX_WARNING_NOCOLOR;
+				break;
+			case LOG_LEVEL_INFO:
+				levelPrefix = LOG_LEVEL_PREFIX_INFO_NOCOLOR;
+				break;
+			case LOG_LEVEL_DEBUG:
+			default:
+				levelPrefix = LOG_LEVEL_PREFIX_DEBUG_NOCOLOR;
+		}
+	}
+	
+	this->_opened_files.at(this->_categories.at(active_category).filename).output 
+		<< this->getTimestampStr(message.timestamp) << " " 
+		<< this->_categories.at(active_category).name 
+		<< levelPrefix
+		<< message.message
+		<< RESET_ANSI << std::endl;
+
+	return ;
 }
 
 /*
@@ -375,39 +444,6 @@ void Tintin_reporter::setColor(bool enabled)
 ** --------------------------------- GETTERS ---------------------------------
 */
 
-const std::string Tintin_reporter::_getLogHead(const std::string &category) const
-{
-	return this->getTimestamp() + " " + this->_categories.at(category).name;
-}
-
-std::string Tintin_reporter::getTimestamp(void) const
-{
-	struct timeval time_now;
-	std::stringstream ss;
-
-	gettimeofday(&time_now, nullptr);
-
-	std::string ms(ntos(time_now.tv_usec));
-	ms.resize(3);
-	if (this->_timestamp_format == LOG_TIMESTAMP_DEFAULT)
-	{
-		if (this->_color_enabled)
-			ss << "[" << LOG_TIMESTAMP_COLOR << timeToString(time_now) << ":" << ms << RESET_ANSI "]";
-		else
-			ss << "[" << timeToString(time_now) << ":" << ms << "]";
-	}
-	return ss.str();
-}
-
-std::string Tintin_reporter::timeToString(const struct timeval &time) const
-{
-	char buffer[80];
-	struct tm *timeinfo;
-
-	timeinfo = localtime(&time.tv_sec);
-	buffer[strftime(buffer, sizeof(buffer) - 1, "%d-%m-%Y %H:%M:%S", timeinfo)] = '\0';
-	return buffer;
-}
 
 const std::map<std::string, Tintin_reporter::log_destination>::const_iterator Tintin_reporter::getOpenFilesBegin(void) const
 {

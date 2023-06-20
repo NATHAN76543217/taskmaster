@@ -54,9 +54,11 @@ class Job
 		int				kill_pid( pid_t pid );
 		int				gracefullStop( void );
 
+		void			setChildStatus( pid_t pid, child_status status);
 		job_status		getStatus( void ) const;
 		void			setStatus( job_status status );
 		std::vector< std::vector<char> >    splitQuotes(const std::string &str) const;
+
 
 		void			setName(const std::string & name);
 		void			setCmd(const std::string & cmd);
@@ -75,7 +77,10 @@ class Job
 		void			setEnvfromparent(const bool pass);
 		void			addEnv(const std::string & key, const std::string & value);
 
-		void			_setpid( const std::set<pid_t> & pid );
+		void			_setpid( const std::map<pid_t, child_status> & pid );
+
+
+
 		const std::string&	getName( void ) const;
 		const std::string&	getCmd( void ) const;
 		uint				getNbProcs( void ) const;
@@ -84,7 +89,7 @@ class Job
 		bool				getAutostart( void ) const;
 		job_policy			getRestartPolicy( void ) const;
 		const char*			getRestartPolicyString( void ) const;
-		const char*			getStatusString( void ) const;
+		const char*			getStatusString( job_status status ) const;
 		uint				getNbRetry( void ) const;
 		const std::vector<uint>		&getExitCodes( void ) const;
 		uint				getStarttime( void ) const;
@@ -95,13 +100,15 @@ class Job
 		bool				getEnvfromparent( void ) const;
 		const std::map<std::string, std::string>&	getEnv( void ) const;
 
-		const std::set<pid_t>&		_getpid( void ) const;
+		const std::map<pid_t, child_status>&		_getpid( void ) const;
+
+
 
 	private:
 		bool				_shouldUpdate;
 		job_status			_status;
 		bool				_complete;
-		std::set<pid_t>		_pid;
+		std::map<pid_t, child_status>	_pid;
 
 		std::string			_name;
 		std::string 		_cmd;
@@ -119,6 +126,7 @@ class Job
 		std::string			_stderr;
 		bool				_envfromparent;
 		std::map<std::string, std::string> _env;
+
 
 	friend class Taskmaster;
 };

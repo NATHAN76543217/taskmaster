@@ -104,8 +104,6 @@ class AThread
 
 
 
-
-
 	/* unique instance initialization*/ 
 	template<typename T>
 		std::atomic<T*>	AThread<T>::instance_{nullptr};
@@ -115,11 +113,7 @@ class AThread
 		T&		AThread<T>::GetInstance( const std::string & name )
 		{
 			if(instance_.load() == nullptr)
-			{
-				// LOG_INFO(LOG_CATEGORY_STDOUT, "Create a <" << name << "> thread : " << typeid(T).name() )
-				// std::cout << "Called once for [" << name << "]" << std::endl;
 				instance_.store(new T(name));
-			}
 			return *(instance_.load());
 		}
 

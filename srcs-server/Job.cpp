@@ -168,10 +168,14 @@ std::ostream &			operator<<( std::ostream & o, Job const & i )
 	o << " - shouldUpdate : " << i.getName() << std::endl;
 	o << " - name : " << i.getName() << std::endl;
 	o << " - complete : " << i.getName() << std::endl;
-	o << " - status : " << i.getStatusString() << std::endl;
+	o << " - status : " << i.getStatusString(i.getStatus()) << std::endl;
 	o << " - cmd : " << i.getCmd() << std::endl;
 	o << " - nbprocs : " << i.getNbProcs() << std::endl;
-	o << " - pid : " << i.getName() << std::endl;
+	o << " - pid : " << std::endl;
+	for (std::map<pid_t, child_status>::const_iterator it = i._getpid().begin() ; it != i._getpid().end() ; it++)
+	{
+		o << "   - (" << it->first << ")(" << i.getStatusString(it->second) << ")"<< std::endl;
+	}
 	o << " - umask : " << i.getUmask() << std::endl;
 	o << " - workingdir : " << i.getWorkingdir() << std::endl;
 	o << " - autostart : " << i.getAutostart() << std::endl;
@@ -280,7 +284,7 @@ int				Job::spawnProcess( void )
 	else
 	{
 		//Parent
-		this->_pid.insert(pid);
+		this->_pid.insert(std::make_pair(pid, starting));
 		LOG_INFO(LOG_CATEGORY_JOB, "[" << this->_name << "] Process '" << pid << "' started.")
 	}
 	return EXIT_SUCCESS;
@@ -304,12 +308,12 @@ int				Job::kill( void )
 	int ret = 0;
 	int error = 0;
 
-	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
-		ret = ::kill(*it, SIGKILL);
+		ret = ::kill(it->first, SIGKILL);
 		if ( ret )
 		{
-			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to kill subprocess [" << *it << "] : " << strerror(errno))
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to kill subprocess [" << it->first << "] : " << strerror(errno))
 		}
 	}
 	return (error);
@@ -319,13 +323,13 @@ int				Job::stop( void )
 {
 	bool error = false;
 	int ret = 0;
-	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
-		ret = ::kill(*it, SIGSTOP);
+		ret = ::kill(it->first, SIGSTOP);
 		if ( ret )
 		{
 			error = true;
-			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to stop subprocess [" << *it << "] : " << strerror(errno))
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to stop subprocess [" << it->first << "] : " << strerror(errno))
 		}
 	}
 	return (error);
@@ -335,13 +339,13 @@ int				Job::terminate( void )
 {
 	bool error = false;
 	int ret = 0;
-	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
-		ret = ::kill(*it, SIGTERM);
+		ret = ::kill(it->first, SIGTERM);
 		if ( ret )
 		{
 			error = true;
-			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to terminate subprocess [" << *it << "] : " << strerror(errno))
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to terminate subprocess [" << it->first << "] : " << strerror(errno))
 		}
 	}
 	return (error);
@@ -351,13 +355,13 @@ int				Job::suspend( void )
 {
 	bool error = false;
 	int ret = 0;
-	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
-		ret = ::kill(*it, SIGTSTP);
+		ret = ::kill(it->first, SIGTSTP);
 		if ( ret )
 		{
 			error = true;
-			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to suspend subprocess [" << *it << "] : " << strerror(errno))
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to suspend subprocess [" << it->first << "] : " << strerror(errno))
 		}
 	}
 	return (error);
@@ -367,13 +371,13 @@ int				Job::resume( void )
 {
 	bool error = false;
 	int ret = 0;
-	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
-		ret = ::kill(*it, SIGCONT);
+		ret = ::kill(it->first, SIGCONT);
 		if ( ret )
 		{
 			error = true;
-			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to wake subprocess [" << *it << "] : " << strerror(errno))
+			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to wake subprocess [" << it->first << "] : " << strerror(errno))
 		}
 	}
 	return (error);
@@ -413,9 +417,9 @@ int				Job::gracefullStop( void )
 	std::this_thread::sleep_for(std::chrono::seconds(this->_stoptime));
 	int stat = 0;
 	int ret = 0;
-	for (std::set<pid_t>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
+	for (std::map<pid_t, child_status >::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
-		ret = waitpid(*it, &stat, WNOHANG);
+		ret = waitpid(it->first, &stat, WNOHANG);
 		if ( ret == 1)
 		{
 			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to `waitpid` : " << strerror(errno) )
@@ -423,8 +427,8 @@ int				Job::gracefullStop( void )
 		}
 		if (!(WIFEXITED(stat) || WIFSIGNALED(stat)))
 		{
-			LOG_INFO(LOG_CATEGORY_JOB, "process [" << *it<< "] not exited after a timeout of [" << this->_stoptime << "] seconds. It will be Killed immediatly.")
-			this->kill_pid(*it);
+			LOG_INFO(LOG_CATEGORY_JOB, "process [" << it->first << "] not exited after a timeout of [" << this->_stoptime << "] seconds. It will be Killed immediatly.")
+			this->kill_pid(it->first);
 			break;
 		}
 		ret = 0;
@@ -440,6 +444,7 @@ int				Job::gracefullStop( void )
 // }
 
 //TODO set default value here and call this function in constructor? 
+//TODO put this method in private
 //TODO before restet: catch death of all childs
 void			Job::resetDefault( void )
 {
@@ -460,7 +465,7 @@ void			Job::resetDefault( void )
 	this->_env.clear();
 }
 
-
+//BUG fix here
 bool		Job::hasPid( pid_t pid )
 {
 	return (this->_pid.find(pid) != this->_pid.end());
@@ -471,6 +476,18 @@ bool		Job::rmPid( pid_t pid )
 	return this->_pid.erase(pid);
 }
 
+void						Job::setChildStatus( pid_t pid, child_status status)
+{
+	std::map<pid_t, child_status>::iterator it = this->_pid.find(pid);
+	if (it == this->_pid.end())
+	{
+		LOG_ERROR(LOG_CATEGORY_JOB, "[" << this->_name << "] pid " << pid << " not found.")
+		return ;
+	}
+	it->second = status ;
+	LOG_DEBUG(LOG_CATEGORY_JOB, "Change status of: " << *this)
+	return ;
+}
 
 
 /*
@@ -574,7 +591,7 @@ void			Job::addEnv(const std::string & key, const std::string & value)
 	this->_env[key] = value;
 }
 
-void			Job::_setpid( const std::set<pid_t> & pid)
+void			Job::_setpid( const std::map<pid_t, child_status > & pid)
 {
 	this->_pid = pid;
 }
@@ -644,9 +661,9 @@ const char*				Job::getRestartPolicyString( void ) const
 	return "unknown";
 }
 
-const char*				Job::getStatusString( void ) const
+const char*				Job::getStatusString( job_status status ) const
 {
-	switch (this->_status)
+	switch (status)
 	{	
 		case not_started:
 			return "not started";
@@ -734,7 +751,7 @@ const std::map<std::string, std::string>&	Job::getEnv( void ) const
 
 
 
-const std::set<pid_t>&			Job::_getpid( void ) const
+const std::map<pid_t, child_status >&			Job::_getpid( void ) const
 {
 	return this->_pid;
 }

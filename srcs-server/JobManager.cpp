@@ -145,7 +145,7 @@ int			JobManager::_updateConfig( void )
 		}
 		found = false;
 	}
-	
+
 	this->_runningjobs = tmp;
 	return EXIT_SUCCESS;
 }
@@ -177,6 +177,11 @@ std::list<Job>::iterator		JobManager::getJobByPid(pid_t pid)
 	return it;
 }
 
+
+
+/*
+	Update child processes status with waitpid's infos
+*/
 void		JobManager::notifyChildDeath( pid_t pid, int stat)
 {
 	{
@@ -188,8 +193,52 @@ void		JobManager::notifyChildDeath( pid_t pid, int stat)
 			LOG_CRITICAL(LOG_CATEGORY_JM, "Notify the death of a pid not found in JobManager")
 			return ;
 		}
-		it->setStatus(incomplete);
-		it->rmPid(pid);
+		if (WIFEXITED(stat))
+		{
+			uint return_value = WEXITSTATUS(stat);
+			if (return_value == 0)
+			{
+				it->setChildStatus(pid, terminated);
+			}
+			else
+			{
+				it->setStatus(incomplete);
+				it->rmPid(pid);
+			}
+		}
+		else if (WIFSIGNALED(stat))
+		{
+			switch(WTERMSIG(stat))
+			{
+				// TODO handle many signals here
+				case SIGTERM:
+				case SIGINT:
+				break;
+				default:
+					it->setChildStatus(pid, killed);
+			}
+			it->setStatus(incomplete);
+			it->rmPid(pid);
+		}
+		else if (WIFSTOPPED(stat))
+		{
+			switch (WSTOPSIG(stat))
+			{
+				case SIGTSTP:
+					it->setChildStatus(pid, suspended);
+				break;
+				case SIGSTOP:
+					it->setChildStatus(pid, stopped);
+				break;
+				default:
+					it->setChildStatus(pid, stopped);
+					LOG_CRITICAL(LOG_CATEGORY_JM, "Unknown stop signal " << WSTOPSIG(stat) << ".")
+			}
+		}
+		else
+		{
+			LOG_CRITICAL(LOG_CATEGORY_JM, "Unknown state notified.")
+		}
 	}
 	this->_hasUpdate.notify_one();
 	(void) stat;
@@ -231,29 +280,8 @@ std::list<Job>::iterator	JobManager::getJobEnd( void )
 	return this->_runningjobs.end();
 }
 
-/*
-** --------------------------------- SIGNALS ---------------------------------
-*/
 
-	// if (WIFEXITED(stat) || WIFSIGNALED(stat))
-	// {
-	// 	if (WIFEXITED(stat))
-	// 	{
-	// 		LOG_INFO(LOG_CATEGORY_JM, "Process [" << child_pid << "] exit with status '" << WEXITSTATUS(stat) << "'.")
-	// 	}
-	// 	else
-	// 	{
-	// 		LOG_INFO(LOG_CATEGORY_JM, "Process [" << child_pid << "] exit with signal '" << WTERMSIG(stat) << "'.")
-	// 	}
-	// 	//TODO implement JobManager::getJobByPid(), JobManager::jobEnd() qui retournent tout deux un iterateur
-	// 	//get the job, remove from his list the terminated pid, store the status as exit or signaled, success or error
 
-	// }
-	// else
-	// {
-	// 	LOG_CRITICAL(LOG_CATEGORY_JM, "Process [" << child_pid << "] marked as 'not exited' and not 'signaled' but waitpid is set on 'NOHANG'.")
-	// 	return ;
-	// }
 
 
 /* ************************************************************************** */

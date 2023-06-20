@@ -9,6 +9,7 @@ taskmaster.code-workspace
 *.log
 *.lock
 config_test.yaml
+THREAD_NAME
 
 # Prerequisites
 *.d

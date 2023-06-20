@@ -10,15 +10,28 @@ enum job_policy {
 };
 
 enum job_status {
-	not_started,
-	starting,
-	running,
-	stopped,
-	suspended,
-	incomplete,
-	exited,
-	terminated
+	not_started,	//init value
+	starting,		//on start
+	running,		//very job if successfuly started
+	stopped,		//process stoped by a SIGSTOP
+	suspended,		//process stopped by a SIGTSTP
+	incomplete,		//p
+	exited,			//process terminate with a bad exit value
+	killed,			//process terminate by a signal
+	terminated		//process terminate with success
 };
+
+typedef enum job_status child_status;
+
+// enum child_status {
+// 	not_started,
+// 	starting,
+// 	running,
+// 	stopped,
+// 	suspended,
+// 	exited,
+// 	terminated
+// };
 
 # define TM_DEF_MAX_CONNECTIONS 3
 # define TM_DEF_CONFIGPATH "./config_test.yaml"
@@ -136,7 +149,10 @@ enum job_status {
 # define LOG_CATEGORY_STDERR	LOG_STDERR_MAGIC
 
 
-# define LOG_TIMESTAMP_DEFAULT 0
+# define LOG_TIMESTAMP_CURRENT	0
+# define LOG_TIMESTAMP_ELAPSED	1
+# define LOG_TIMESTAMP_UTC		2
+# define LOG_TIMESTAMP_SUMMERTIME 1
 
 # define THREADTAG_SIGNALCATCHER	"[SignalCatcher] "
 # define THREADTAG_LOGGER			"[Logger] "

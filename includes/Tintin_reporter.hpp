@@ -8,6 +8,8 @@
 # include <string>
 # include <queue>
 # include <map>
+# include <chrono>
+
 # include <sys/time.h>
 # include <ntos.hpp>
 
@@ -35,6 +37,8 @@ class Tintin_reporter;
 
 class Tintin_reporter : public virtual AThread<Tintin_reporter>
 {
+	using CronType = std::chrono::system_clock;
+
 	public:
 		class emptyInitException : public std::exception
 		{
@@ -65,20 +69,21 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		struct log_message
 		{
-			log_message(uint arg_level, const char* arg_category, const char* arg_thread, const std::string & arg_message) : 
-				level(arg_level), category(arg_category), thread(arg_thread), message(arg_message)
+			log_message(uint arg_level, const char* arg_category, const char* arg_thread, CronType::time_point  arg_timestamp, const std::string & arg_message) : 
+				level(arg_level), category(arg_category), thread(arg_thread), timestamp(arg_timestamp), message(arg_message)
 			{}
-			log_message(uint arg_level, const char* arg_category, const char* arg_thread, const char * arg_message) : 
-				level(arg_level), category(arg_category), thread(arg_thread), message(arg_message)
+			log_message(uint arg_level, const char* arg_category, const char* arg_thread, CronType::time_point arg_timestamp, const char * arg_message) : 
+				level(arg_level), category(arg_category), thread(arg_thread), timestamp(arg_timestamp),message(arg_message)
 			{}
 			log_message(const Tintin_reporter::log_message & src) : 
-				level(src.level), category(src.category), thread(src.thread), message(src.message)
+				level(src.level), category(src.category), thread(src.thread), timestamp(src.timestamp), message(src.message)
 			{}
 
-			uint		level;
-			const char*	category;
-			const char*	thread; //TODO implement
-			std::string	message;
+			uint						level;
+			const char*					category;
+			const char*					thread; //TODO implement
+			CronType::time_point		timestamp;
+			std::string					message;
 		};
 
 		struct log_category
@@ -105,12 +110,11 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		Tintin_reporter(const std::string & defaultFile = "default.log");
 		~Tintin_reporter();
 
-		const std::string					_getLogHead(const std::string & category) const;
-
 		std::map<std::string, log_destination>	_opened_files;
 		std::map<std::string, log_category>		_categories;
 		std::string								_defaultCategory;
 		uint									_timestamp_format;
+		CronType::time_point					_starttime;
 		uint									_color_enabled;
 		static std::condition_variable			_hasUpdate;
 		static std::mutex						_mutexUpdate;
@@ -118,12 +122,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 	protected:
 
-		void						_log(uint level, const std::string & category, const std::string & message);
-		void						_log_critical(const std::string & category, const std::string & message);
-		void						_log_error(const std::string & category, const std::string & message);
-		void						_log_warning(const std::string & category, const std::string & message);
-		void						_log_info(const std::string & category, const std::string & message);
-		void						_log_debug(const std::string & category, const std::string & message);
+		void						_log(const log_message & message);
 		void						addDefaultCategory(const std::string & outfile);
 
 		Tintin_reporter::log_destination	newLogDestination( void ) const;
@@ -132,11 +131,20 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 	public:
 
+		/* 
+			Return number of miliseconds elapsed since epoch Unix
+		*/
+		static CronType::time_point		getTimestamp( void )
+		{
+			return CronType::now();
+		}
+
+
 		static	void			log(uint level, const char* category, const std::string & message)
 		{
 			{
 				std::lock_guard<std::mutex> lock(Tintin_reporter::_mutexUpdate);
-				Tintin_reporter::_messageQueue.push(log_message(level, category, "", message ));
+				Tintin_reporter::_messageQueue.push(log_message(level, category, "", Tintin_reporter::getTimestamp(), message ));
 			}
 			Tintin_reporter::_hasUpdate.notify_all();
 		}
@@ -146,11 +154,11 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		void				setColor( bool enabled );
 		bool				getColor( void ) const;
-		const std::string&	getDefaultCategory( void ) const;
+
 		uint				getNbCategories( void ) const;
 		uint				getNbOpenfiles( void ) const;
-		std::string			getTimestamp( void ) const;
-		std::string			timeToString( const struct timeval & time ) const;
+		std::string			getTimestampStr(const CronType::time_point & timestamp) const;
+		const std::string&	getDefaultCategory( void ) const;
 		std::string			formatCategoryName( const std::string & categoryName) const;
 		int					addCategory(const std::string & str, const std::string & outfile = "");
 

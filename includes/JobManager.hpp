@@ -52,7 +52,6 @@ class JobManager : public virtual  AThread<JobManager>
 	
 	std::list<Job>::iterator	getJobEnd( void );
 	std::list<Job>::iterator	getJobByPid(pid_t pid);
-
 	void			setConfigChanged( void );
 	void			stop( void );
 	void			notifyChildDeath( pid_t pid, int stat);
