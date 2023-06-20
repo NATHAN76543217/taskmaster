@@ -70,7 +70,7 @@ class Taskmaster : public virtual AThread<Taskmaster>
 	public:
 
 		static Taskmaster&		CreateInstance( const std::string & name );
-		static void				DestroyInstance( void );
+		static void				Destroy( void );
 
 		void		operator()( void );
 

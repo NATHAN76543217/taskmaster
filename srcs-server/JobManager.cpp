@@ -15,12 +15,13 @@
 
 void			JobManager::operator()()
 {
-	std::cerr << "JobManager wait to start" << std::endl;
+	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_JOBMANAGER << " wait to start");
 	{
 		std::unique_lock<std::mutex> lock_start(this->_internal_mutex);
 		this->_ready.wait(lock_start);
 	}
-	std::cerr << "JobManager start." << std::endl;
+	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_JOBMANAGER << "Thread start")
+	LOG_INFO(LOG_CATEGORY_JM, THREADTAG_JOBMANAGER << "Start")
 
 	/* Init */
 	LOG_INFO(LOG_CATEGORY_THREAD, "Thread `JobManager` - start")
@@ -72,17 +73,18 @@ void			JobManager::operator()()
 		this->_hasUpdate.wait(lock);
 	}
 	while (this->_running);
-	LOG_INFO(LOG_CATEGORY_THREAD, "JM thread - end ")
+	LOG_INFO(LOG_CATEGORY_JM, THREADTAG_JOBMANAGER << "End.")
+	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_JOBMANAGER << "Thread end.")
 }
+
+
 
 int			JobManager::_updateConfig( void )
 {
 	std::list<Job> 	tmp;
-	
+	//TODO remove debug
 	std::cout << std::endl << "JobSize before config check = " << this->_runningjobs.size() << std::endl;
 	Taskmaster& TM = Taskmaster::GetInstance();
-
-	// std::lock_guard<std::mutex> lock(TM._internal_mutex);
 
 
 	/* Update the configuration */

@@ -6,7 +6,7 @@
 ** ------------------------------- Static VAR init --------------------------------
 */
 std::condition_variable						Tintin_reporter::_hasUpdate;
-std::mutex									Tintin_reporter::_mutexUpdate;
+std::mutex									Tintin_reporter::_mutexQueue;
 std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::queue<Tintin_reporter::log_message>();
 
 
@@ -19,7 +19,8 @@ Tintin_reporter::Tintin_reporter(const std::string &defaultFile) :
 																_defaultCategory(LOG_CATEGORY_DEFAULT),
 																_timestamp_format(LOG_TIMESTAMP_CURRENT),
 																_starttime(),
-																_color_enabled(false)
+																_color_enabled(false),
+																_mutexUpdate()
 {
 	this->addDefaultCategory(defaultFile);
 	this->_starttime = CronType::now();
@@ -61,35 +62,41 @@ Tintin_reporter::~Tintin_reporter()
 
 void				Tintin_reporter::operator()( void )
 {
-	LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger constructed - wait to start");
+	LOG_INFO(LOG_CATEGORY_THREAD, "Logger wait to start");
 	{
 		std::unique_lock<std::mutex> lock(this->_internal_mutex);
 		this->_ready.wait(lock);
 	}
 
-	LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger thread start.");
+	LOG_INFO(LOG_CATEGORY_THREAD, "Logger thread start.");
+	LOG_INFO(LOG_CATEGORY_LOGGER, "Logger thread start.");
 
-	std::unique_lock<std::mutex> update_lock(Tintin_reporter::_mutexUpdate);
-	std::unique_lock<std::mutex> intern_lock(Tintin_reporter::_internal_mutex);
-	
-	intern_lock.unlock();
+	std::unique_lock<std::mutex> update_lock(this->_mutexUpdate);
+
+	LOG_INFO(LOG_CATEGORY_LOGGER, "Logger thread mutex taken.");
 	do {
-		intern_lock.lock();
-		while (!Tintin_reporter::_messageQueue.empty())
 		{
-			this->_log(this->_messageQueue.front());
-			Tintin_reporter::_messageQueue.pop();
-		}
-		{
-			std::lock_guard<std::mutex> lk(this->_internal_mutex);
+			std::lock_guard<std::mutex> intern_lock(this->_internal_mutex);
+			{
+				std::lock_guard<std::mutex> queue_lock(Tintin_reporter::_mutexQueue);
+
+				while (!Tintin_reporter::_messageQueue.empty())
+				{
+					this->_log(this->_messageQueue.front());
+					Tintin_reporter::_messageQueue.pop();
+				}
+			}
 			if (this->_running == false)
+			{
+				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_LOGGER, "", CronType::now(), "End."));
+				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_THREAD, "", CronType::now(), "Thread end."));
 				break;
+			}
 		}
-		intern_lock.unlock();
 		Tintin_reporter::_hasUpdate.wait(update_lock);
 	}
 	while (true);
-	LOG_INFO(LOG_CATEGORY_DEFAULT, "Logger thread end.")
+	return ;
 }
 
 
@@ -233,7 +240,7 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 		/* If no filename provided, log to default file */
 		new_category.filename = this->_categories.at(this->_defaultCategory).filename;
 		this->_opened_files.at(new_category.filename).nb_references++;
-		// LOG_WARN(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' point to default file (No filename provided).")
+		LOG_DEBUG(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' point to default file (No filename provided).")
 		return EXIT_SUCCESS;
 	}
 
@@ -243,7 +250,7 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 	{
 		/* Destination file already exist, just link to it */
 		cat_dst->second.nb_references++;
-		// LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category '" + CategoryName + "' linked to '" + new_category.filename + "'.")
+		LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category '" + CategoryName + "' linked to '" + new_category.filename + "'.")
 		return EXIT_SUCCESS;
 	}
 

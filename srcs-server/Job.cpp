@@ -3,6 +3,7 @@
 
 std::ostream &			operator<<( std::ostream & o, Job const & i );
 
+//TODO remove all debug stuff
 int						Job::Compare( const Job & j1, const Job & j2)	
 {
 	if (j1.getName().compare(j2.getName()))

@@ -154,11 +154,11 @@ typedef enum job_status child_status;
 # define LOG_TIMESTAMP_UTC		2
 # define LOG_TIMESTAMP_SUMMERTIME 1
 
-# define THREADTAG_SIGNALCATCHER	"[SignalCatcher] "
-# define THREADTAG_LOGGER			"[Logger] "
-# define THREADTAG_JOBMANAGER		"[JobManager] "
-# define THREADTAG_MAIN				"[Main] "
-# define THREADTAG_TASKMASTER		"[Taskmaster] "
+# define THREADTAG_SIGNALCATCHER	std::setw(16) << "[SignalCatcher] "
+# define THREADTAG_LOGGER			std::setw(16) << "[Logger] "
+# define THREADTAG_JOBMANAGER		std::setw(16) << "[JobManager] "
+# define THREADTAG_MAIN				std::setw(16) << "[Main] "
+# define THREADTAG_TASKMASTER		std::setw(16) << "[Taskmaster] "
 
 
 # endif //TMP_VALUES_HPP

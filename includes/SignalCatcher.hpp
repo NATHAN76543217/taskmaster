@@ -13,16 +13,13 @@ class SignalCatcher : public virtual AThread<SignalCatcher>
 	private:
 		/* Private variables */
 		sigset_t		_sigSet;
-		int				_sigNum;
 
 	protected:
 		/* Constructor */ 
 		SignalCatcher(const std::string & name = "SignalCatcher") : 
 			AThread<SignalCatcher>(*this, name),
-			_sigSet(0),
-			_sigNum(0)
+			_sigSet(0)
 		{
-			LOG_DEBUG(LOG_CATEGORY_THREAD, "SignalCatcher - Constructor" )
 		};
 
 	public:

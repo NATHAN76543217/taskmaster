@@ -1,44 +1,40 @@
 # include "Taskmaster.hpp"
 
-
 /*
 **	INIT
 */
 
-
 Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 {
-	SignalCatcher::GetInstance();
-	
-	/* Block reception of all signals on this thread */
 	sigset_t set;
 	sigfillset(&set);
-	pthread_sigmask(SIG_SETMASK, &set, NULL);
+	if (pthread_sigmask(SIG_SETMASK, &set, NULL))
+	{
+		std::cout << "Failed to `pthread_sigmask` : " << strerror(errno) ;
+	}
 
+	SignalCatcher::GetInstance();
 	Taskmaster & TM = Taskmaster::GetInstance(name);
-	
 	Tintin_reporter& logger = Tintin_reporter::GetInstance("./default.log");
 #if LOG_CATEGORY_AUTO == false
 	TM.initCategories();
 	std::cout << logger << std::endl;
-	// LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::GetInstance())
-
+	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::GetInstance())
 # else
-	Tintin_reporter::getLogManager("./default.log");
+	Tintin_reporter::GetInstance("./default.log");
 #endif
 	JobManager::GetInstance();
-
 	return TM;
 }
 
 
 
-void			Taskmaster::DestroyInstance( void )
+void			Taskmaster::Destroy( void )
 {
 	JobManager::DestroyInstance();
 	Tintin_reporter::DestroyInstance();
 	SignalCatcher::DestroyInstance();
-	AThread<Taskmaster>::DestroyInstance();
+	Taskmaster::DestroyInstance();
 }
 
 
@@ -46,7 +42,7 @@ void			Taskmaster::DestroyInstance( void )
 int			Taskmaster::initialization( const char** env )
 {
 	LOG_INFO(LOG_CATEGORY_INIT, "Wait to initialize taskmaster")
-	std::unique_lock<std::mutex> lock(this->_internal_mutex);
+	std::lock_guard<std::mutex> lock(this->_internal_mutex);
 	LOG_INFO(LOG_CATEGORY_INIT, "Initialization start.")
 
 	this->setEnv(env);
@@ -60,8 +56,7 @@ int			Taskmaster::initialization( const char** env )
 	}
 
 
-	std::cerr << "TM END BEFORE UNCLOCK init lock" << std::endl;
-	std::cerr << "TM END init lock" << std::endl;
+	LOG_INFO(LOG_CATEGORY_INIT, "Initialization done.")
 
 	return EXIT_SUCCESS;
 }
@@ -75,8 +70,10 @@ void		Taskmaster::initCategories( void ) const
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_DEFAULT);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_LOGGER, LOG_STDOUT_MAGIC);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_INIT);
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_MAIN);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_NETWORK);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
+	// Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_CONFIG);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JOB);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JM);
@@ -421,19 +418,19 @@ int			Taskmaster::reloadConfigFile( void )
 
 void		Taskmaster::operator()( void )
 {
-	std::cerr << "Taskmaster (server) wait to start." << std::endl;
+	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_TASKMASTER << " wait to start")
 	{
 		std::unique_lock<std::mutex> lock(this->_internal_mutex);
 		this->_ready.wait(lock);
 	}
-	std::cerr << "Taskmaster (server) start." << std::endl;
+	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_TASKMASTER << "Thread start")
+	LOG_INFO(LOG_CATEGORY_DEFAULT, THREADTAG_TASKMASTER << "Start")
 
 	while ( true )
 	{
-		// LOG_ERROR(LOG_CATEGORY_NETWORK, "Put all server stuf here")
-		// LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
+		LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
 
-		std::this_thread::sleep_for(std::chrono::seconds(3));
+		std::this_thread::sleep_for(std::chrono::seconds(2));
 		
 		{
 			std::lock_guard<std::mutex> lk(this->_internal_mutex);
@@ -443,8 +440,6 @@ void		Taskmaster::operator()( void )
 			}
 		}
 	}
-	std::cerr << "Taskmaster (server) out." << std::endl;
-
-	// LOG_INFO(LOG_CATEGORY_NETWORK, "out of TM loop")
-
+	LOG_INFO(LOG_CATEGORY_DEFAULT, THREADTAG_TASKMASTER << "End")
+	return ;
 }

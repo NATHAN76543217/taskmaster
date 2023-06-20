@@ -116,8 +116,9 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		uint									_timestamp_format;
 		CronType::time_point					_starttime;
 		uint									_color_enabled;
+		std::mutex								_mutexUpdate;
 		static std::condition_variable			_hasUpdate;
-		static std::mutex						_mutexUpdate;
+		static std::mutex						_mutexQueue;
 		static std::queue<log_message>			_messageQueue;
 
 	protected:
@@ -131,9 +132,6 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 	public:
 
-		/* 
-			Return number of miliseconds elapsed since epoch Unix
-		*/
 		static CronType::time_point		getTimestamp( void )
 		{
 			return CronType::now();
@@ -143,7 +141,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		static	void			log(uint level, const char* category, const std::string & message)
 		{
 			{
-				std::lock_guard<std::mutex> lock(Tintin_reporter::_mutexUpdate);
+				std::lock_guard<std::mutex> lock(Tintin_reporter::_mutexQueue);
 				Tintin_reporter::_messageQueue.push(log_message(level, category, "", Tintin_reporter::getTimestamp(), message ));
 			}
 			Tintin_reporter::_hasUpdate.notify_all();

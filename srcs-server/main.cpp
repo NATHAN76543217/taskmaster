@@ -13,14 +13,14 @@
 //DONE for logger implement defaultDestination for default output file
 //DONE add lock file 
 //TODO daemonized main process 
-//TODO start childs according to config
-//TODO Code a client with the grfic library FTXUI
+//DONE start childs according to config
+//TODO Code a client with the graphic library FTXUI
 //TODO ptrace on ourselves to avoid process monitoring
 //TODO parse config file at start to have color enabled on every log
 //TODO define all auto restart possible values for conf
 //TODO use strsignal to interpret signal number to signal string
 //TODO Use <chrono> in all our time stuff (specialy timestamp)
-//TODO for logger add mutex for every log_destination (with required checks) but only for files (std::cout/cerr is thread safe)
+//DONE for logger add mutex for every log_destination (with required checks) but only for files (std::cout/cerr is thread safe)
 //TODO implement a flood protection from a valid connection
 //TODO add config key envfromparent
 //TODO avoid duplicate in job names
@@ -30,10 +30,10 @@
 //DONE transform all current code in thread-safe code
 //TODO implement restart policy for jobs
 //TODO handle child processes at end
-//TODO transforme LOG_XLEVEL to not call the object logger
+//DONE transforme LOG_XLEVEL to not call the object logger
 //TODO wait all child are waitpid'd before stoping signal thread
-//TODO Move timestamp creation in a way to have the timestamp of emiting the message and not the timestamp of writing.
-//REVIEW Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
+//DONE Move timestamp creation in a way to have the timestamp of emiting the message and not the timestamp of writing.
+//TODO Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
 
 class ClientData
 {
@@ -109,18 +109,14 @@ int main(int ac, char** av, const char** env)
 
 	Taskmaster &TM = Taskmaster::CreateInstance("Taskmaster");
 
-	LOG_INFO(LOG_CATEGORY_DEFAULT, "Before Initialization.")
-	std::cerr << "Before Initialization." << std::endl;
 
 
 	if (TM.initialization(env) == EXIT_FAILURE)
 	{
 		LOG_ERROR(LOG_CATEGORY_INIT, "Initialization failed.")
-		std::cerr << "Initialization failed." << std::endl;
-		Taskmaster::DestroyInstance();
+		Taskmaster::Destroy();
 		return EXIT_FAILURE;
 	}
-	LOG_INFO(LOG_CATEGORY_MAIN, "Initialization done.")
 
 	// Display all jobs
 	// std::cout << "=== JOBS ===" << std::endl;
@@ -128,19 +124,22 @@ int main(int ac, char** av, const char** env)
 	// {
 	// 	LOG_DEBUG(LOG_CATEGORY_JOB, *it);
 	// }
+	LOG_INFO(LOG_CATEGORY_MAIN, "Start all threads.");
+
 	Tintin_reporter::GetInstance().start();
 	SignalCatcher::GetInstance().start();
 	JobManager::GetInstance().start();
 	TM.start();
 
-	LOG_INFO(LOG_CATEGORY_MAIN, "Wait taskmaster's end.")
-	std::cerr << "main start to wait" << std::endl;
+	LOG_INFO(LOG_CATEGORY_MAIN, "Main suspended until taskmaster's end.")
 	TM.waitEnd();
-	std::cerr << "main start final part" << std::endl;
-	LOG_INFO(LOG_CATEGORY_MAIN, "Wake - Ready to quit")
+	LOG_INFO(LOG_CATEGORY_MAIN, "Main resumed.")
 
 	LOG_DEBUG(LOG_CATEGORY_MAIN, "Destroying Taskmaster's instance.")
-	Taskmaster::DestroyInstance();
+
+	/* NO LOGGER USE BELLOW THIS LINE */
+
+	Taskmaster::Destroy();
 
 	freeLockFile(TM_DEF_LOCKPATH);
 	
