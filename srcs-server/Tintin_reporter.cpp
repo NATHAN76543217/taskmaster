@@ -88,8 +88,8 @@ void				Tintin_reporter::operator()( void )
 			}
 			if (this->_running == false)
 			{
-				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_LOGGER, "", Tintin_reporter::getTimestamp(), "End."));
-				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_THREAD, "", Tintin_reporter::getTimestamp(), "Thread end."));
+				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_LOGGER, std::this_thread::get_id(), Tintin_reporter::getTimestamp(), "End."));
+				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_THREAD, std::this_thread::get_id(), Tintin_reporter::getTimestamp(), "Thread end."));
 				break;
 			}
 		}
@@ -134,6 +134,10 @@ void				Tintin_reporter::stop( void )
 	return ;
 }
 
+void				Tintin_reporter::addThreadName(const std::thread::id id, const std::string & name)
+{
+	this->_threadnames.insert(make_pair(id,name));
+}
 
 
 /*
@@ -243,8 +247,11 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 		LOG_DEBUG(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' point to default file (No filename provided).")
 		return EXIT_SUCCESS;
 	}
-
-	new_category.filename = this->getLogdir() + outfile;
+	if (outfile != LOG_STDOUT_MAGIC && outfile != LOG_STDOUT_MAGIC)
+		new_category.filename = this->getLogdir() + outfile;
+	else
+		new_category.filename = outfile;
+	
 	std::map<std::string, Tintin_reporter::log_destination>::iterator cat_dst = this->_opened_files.find(new_category.filename);
 	if (cat_dst != this->_opened_files.end())
 	{
@@ -431,6 +438,7 @@ void Tintin_reporter::_log(const log_message & message)
 	this->_opened_files.at(this->_categories.at(active_category).filename).output 
 		<< this->getTimestampStr(message.timestamp) << " " 
 		<< this->_categories.at(active_category).name 
+		<< std::setw(16) << this->_threadnames[message.thread]
 		<< levelPrefix
 		<< message.message
 		<< RESET_ANSI << std::endl;

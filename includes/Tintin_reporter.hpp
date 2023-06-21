@@ -10,7 +10,6 @@
 # include <map>
 # include <chrono>
 
-# include <sys/time.h>
 # include <ntos.hpp>
 
 class Tintin_reporter;
@@ -69,10 +68,10 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		struct log_message
 		{
-			log_message(uint arg_level, const char* arg_category, const char* arg_thread, CronType::time_point  arg_timestamp, const std::string & arg_message) : 
+			log_message(uint arg_level, const char* arg_category, std::thread::id arg_thread, CronType::time_point  arg_timestamp, const std::string & arg_message) : 
 				level(arg_level), category(arg_category), thread(arg_thread), timestamp(arg_timestamp), message(arg_message)
 			{}
-			log_message(uint arg_level, const char* arg_category, const char* arg_thread, CronType::time_point arg_timestamp, const char * arg_message) : 
+			log_message(uint arg_level, const char* arg_category, std::thread::id arg_thread, CronType::time_point arg_timestamp, const char * arg_message) : 
 				level(arg_level), category(arg_category), thread(arg_thread), timestamp(arg_timestamp),message(arg_message)
 			{}
 			log_message(const Tintin_reporter::log_message & src) : 
@@ -81,7 +80,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 			uint						level;
 			const char*					category;
-			const char*					thread; //TODO implement
+			std::thread::id				thread;
 			CronType::time_point		timestamp;
 			std::string					message;
 		};
@@ -112,6 +111,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		std::map<std::string, log_destination>	_opened_files;
 		std::map<std::string, log_category>		_categories;
+		std::map<std::thread::id, std::string>	_threadnames;
 		std::string								_defaultCategory;
 		std::string								_logDirectory;
 		uint									_timestamp_format;
@@ -150,7 +150,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		{
 			{
 				std::lock_guard<std::mutex> lock(Tintin_reporter::_mutexQueue);
-				Tintin_reporter::_messageQueue.push(log_message(level, category, "", Tintin_reporter::getTimestamp(), message ));
+				Tintin_reporter::_messageQueue.push(log_message(level, category, std::this_thread::get_id(), Tintin_reporter::getTimestamp(), message ));
 			}
 			Tintin_reporter::_hasUpdate.notify_all();
 		}
@@ -170,6 +170,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		const std::string&	getDefaultCategory( void ) const;
 		std::string			formatCategoryName( const std::string & categoryName) const;
 		int					addCategory(const std::string & str, const std::string & outfile = "");
+		void				addThreadName( const std::thread::id id, const std::string & name );
 
 		const std::map<std::string, log_category >::const_iterator			getCategoriesBegin( void ) const;
 		const std::map<std::string, log_category >::const_iterator			getCategoriesEnd( void ) const;

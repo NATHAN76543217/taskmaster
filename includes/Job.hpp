@@ -100,7 +100,7 @@ class Job
 		bool				getEnvfromparent( void ) const;
 		const std::map<std::string, std::string>&	getEnv( void ) const;
 
-		const std::map<pid_t, child_status>&		_getpid( void ) const;
+		const std::map<pid_t, child_status>&		_getpids( void ) const;
 
 
 

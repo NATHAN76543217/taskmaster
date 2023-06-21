@@ -7,7 +7,7 @@
 //DONE implement logging to files
 //DONE Finish to well format the LOGs
 //DONE Reload config file on SIGHUP
-//SONE Install yaml-cpp 
+//DONE Install yaml-cpp 
 //TODO Parse all server config file
 //DONE Parse all programs config file
 //DONE for logger implement defaultDestination for default output file
@@ -16,16 +16,16 @@
 //DONE start childs according to config
 //TODO Code a client with the graphic library FTXUI
 //TODO ptrace on ourselves to avoid process monitoring
-//TODO parse config file at start to have color enabled on every log
+//DONE parse config file at start to have color enabled on every log
 //TODO define all auto restart possible values for conf
 //TODO use strsignal to interpret signal number to signal string
-//TODO Use <chrono> in all our time stuff (specialy timestamp)
+//DONE Use <chrono> in all our time stuff (specialy timestamp)
 //DONE for logger add mutex for every log_destination (with required checks) but only for files (std::cout/cerr is thread safe)
 //TODO implement a flood protection from a valid connection
-//TODO add config key envfromparent
+//TODO add job config key envfromparent
 //TODO avoid duplicate in job names
 //TODO when change job._nbprocs (setnbprocs) just spawn od unspawn the right number of processes without touching the good ones
-//TODO add struct job_worker that contain the pid and status of child processes
+//DONE add struct job_worker that contain the pid and status of child processes
 //DONE implement signal handler as a separate thread 
 //DONE transform all current code in thread-safe code
 //TODO implement restart policy for jobs
@@ -33,8 +33,8 @@
 //DONE transforme LOG_XLEVEL to not call the object logger
 //TODO wait all child are waitpid'd before stoping signal thread
 //DONE Move timestamp creation in a way to have the timestamp of emiting the message and not the timestamp of writing.
-//TODO Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
-//TODO on pwd and logpath, add a way to create intermediate directories to this path
+//DONE Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
+//TODO On `pwd` and `logpath`, add a way to create intermediate directories to this path
 
 class ClientData
 {

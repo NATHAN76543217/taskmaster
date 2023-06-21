@@ -173,7 +173,7 @@ std::ostream &			operator<<( std::ostream & o, Job const & i )
 	o << " - cmd : " << i.getCmd() << std::endl;
 	o << " - nbprocs : " << i.getNbProcs() << std::endl;
 	o << " - pid : " << std::endl;
-	for (std::map<pid_t, child_status>::const_iterator it = i._getpid().begin() ; it != i._getpid().end() ; it++)
+	for (std::map<pid_t, child_status>::const_iterator it = i._getpids().begin() ; it != i._getpids().end() ; it++)
 	{
 		o << "   - (" << it->first << ")(" << i.getStatusString(it->second) << ")"<< std::endl;
 	}
@@ -752,7 +752,7 @@ const std::map<std::string, std::string>&	Job::getEnv( void ) const
 
 
 
-const std::map<pid_t, child_status >&			Job::_getpid( void ) const
+const std::map<pid_t, child_status >&			Job::_getpids( void ) const
 {
 	return this->_pid;
 }

@@ -123,7 +123,7 @@ int			JobManager::_updateConfig( void )
 			tmp.push_back(*job);
 			Job & changedJob = tmp.back();
 			changedJob.setStatus(incomplete);
-			changedJob._setpid(rjob->_getpid());
+			changedJob._setpid(rjob->_getpids());
 		}
 	}
 	/* Remove job not found in new config */

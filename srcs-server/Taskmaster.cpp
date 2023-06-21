@@ -54,6 +54,13 @@ int			Taskmaster::initialization( const char** env )
 
 	LOG_INFO(LOG_CATEGORY_INIT, "PID: " << ::getpid())
 
+	/* Init thread name array */
+	Tintin_reporter::GetInstance().addThreadName(std::this_thread::get_id(), THREADTAG_MAIN);
+	Tintin_reporter::GetInstance().addThreadName(SignalCatcher::GetInstance().getThreadID(), THREADTAG_SIGNALCATCHER);
+	Tintin_reporter::GetInstance().addThreadName(Tintin_reporter::GetInstance().getThreadID(), THREADTAG_LOGGER);
+	Tintin_reporter::GetInstance().addThreadName(Taskmaster::GetInstance().getThreadID(), THREADTAG_TASKMASTER);
+	Tintin_reporter::GetInstance().addThreadName(JobManager::GetInstance().getThreadID(), THREADTAG_JOBMANAGER);
+	
 	LOG_INFO(LOG_CATEGORY_INIT, "Initialization done.")
 
 	return EXIT_SUCCESS;

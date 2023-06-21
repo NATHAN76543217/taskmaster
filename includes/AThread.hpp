@@ -97,7 +97,10 @@ class AThread
 			return this->_name;
 		}
 
-
+		std::thread::id		getThreadID( void ) const
+		{
+			return this->_thread.get_id();
+		}
 };
 
 	/* unique instance initialization*/ 
