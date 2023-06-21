@@ -17,7 +17,6 @@ class AThread
 		std::string		_name;
 
 
-
 	protected:
 
 		bool						_running;
@@ -38,7 +37,6 @@ class AThread
 		_ready(),
 		_stop()
 		{
-			// LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Constructor <" << this->_name << ">.")
 		}
 
 		// AThread( const std::string & name) : 
@@ -64,7 +62,7 @@ class AThread
 
 		virtual void			operator()( void )
 		{
-			// LOG_CRITICAL(LOG_CATEGORY_THREAD, "AThread - Operator()")	
+			// LOG_CRITICAL(LOG_CATEGORY_THREAD, "AThread - Operator()")
 		}
 
 
@@ -102,9 +100,8 @@ class AThread
 
 };
 
-
-
 	/* unique instance initialization*/ 
+
 	template<typename T>
 		std::atomic<T*>	AThread<T>::instance_{nullptr};
 
@@ -130,9 +127,6 @@ class AThread
 
 		}
 
-
-// template <typename T>
-// constexpr std::atomic<T*> AThread<T>::instance_(nullptr);
 
 // std::ostream &			operator<<( std::ostream & o, AThread const & i );
 

@@ -25,8 +25,7 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		/* Config values */
 		
 		std::string		_workingdir;
-		std::string		_lockpath;
-		std::string		_logpath;
+		std::string		_logdir;
 		uint			_max_connections;
 		bool			_logcolor;
 		std::atomic<const char**>	_parentEnv; 
@@ -37,8 +36,7 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		Taskmaster(const std::string & name = "Taskmaster") :
 			AThread(*this, name),
 			_workingdir(""),
-			_lockpath(TM_DEF_LOCKPATH),
-			_logpath(TM_DEF_LOGPATH),
+			_logdir(TM_DEF_LOGDIR),
 			_max_connections(TM_DEF_MAX_CONNECTIONS),
 			_logcolor(TM_DEF_LOGCOLOR)
 		{
@@ -72,20 +70,25 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		static Taskmaster&		CreateInstance( const std::string & name );
 		static void				Destroy( void );
 
-		void		operator()( void );
+		void					operator()( void );
 
 
 		/* Init */
 		int			initialization( const char** env );
 		void		initCategories( void ) const;
 
-		const char** getEnv( void ) const;
-		void		setEnv( const char **env);
 		void		setWorkingdir( const std::string & str);
 		const std::string&		getWorkingdir( void ) const;
 		int			loadConfigFile(const std::string & path);
 		int			reloadConfigFile( void );
-		
+
+		/* Getters and Setters */		
+		const std::string & getLogdir( void ) const;
+		void				setLogdir( const std::string & path );
+
+		const char**		getEnv( void ) const;
+		void				setEnv( const char **env);
+
 	// friend class JobManager;
 	friend class JobManager;
 	friend class AThread;

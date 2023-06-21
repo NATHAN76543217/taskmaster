@@ -113,6 +113,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		std::map<std::string, log_destination>	_opened_files;
 		std::map<std::string, log_category>		_categories;
 		std::string								_defaultCategory;
+		std::string								_logDirectory;
 		uint									_timestamp_format;
 		CronType::time_point					_starttime;
 		uint									_color_enabled;
@@ -131,6 +132,13 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		Tintin_reporter::log_destination	newLogDestinationStderr( void ) const;
 
 	public:
+
+		static Tintin_reporter&			CreateInstance( const std::string & dir, const std::string & defaultName )
+		{
+			Tintin_reporter& logger = Tintin_reporter::GetInstance(dir + defaultName);
+			logger.setLogdir(dir);
+			return logger;
+		}
 
 		static CronType::time_point		getTimestamp( void )
 		{
@@ -152,6 +160,9 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		void				setColor( bool enabled );
 		bool				getColor( void ) const;
+
+		const std::string & getLogdir( void ) const;
+		void				setLogdir( const std::string & path );
 
 		uint				getNbCategories( void ) const;
 		uint				getNbOpenfiles( void ) const;

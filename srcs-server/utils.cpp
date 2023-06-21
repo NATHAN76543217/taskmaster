@@ -16,7 +16,7 @@ int			takeLockFile( const std::string & path )
 		}
 		else
 		{
-			std::cerr << "Failed to open lock file : " << strerror(errno) << std::endl;
+			std::cerr << "Failed to open lock file '" << path << "' : " << strerror(errno) << std::endl;
 		}
 		return EXIT_FAILURE;
 	}

@@ -3,11 +3,10 @@ server:
     max_connections: 3
     ports:
         - 4242
-        # - 4242
+        - 4343
     pwd: /tmp
     logcolor: true
-    logpath: /var/log/matt_daemon
-    lockpath: /var/lock/matt_daemon.lock
+    logdir: /var/log/matt_daemon/
     
 programs:
     nginx:

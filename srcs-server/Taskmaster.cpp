@@ -15,7 +15,12 @@ Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 
 	SignalCatcher::GetInstance();
 	Taskmaster & TM = Taskmaster::GetInstance(name);
-	Tintin_reporter& logger = Tintin_reporter::GetInstance("./default.log");
+	if (TM.loadConfigFile(TM_DEF_CONFIGPATH))
+	{
+		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
+		return TM;
+	}
+	Tintin_reporter& logger = Tintin_reporter::CreateInstance(TM.getLogdir(), "default.log");
 #if LOG_CATEGORY_AUTO == false
 	TM.initCategories();
 	std::cout << logger << std::endl;
@@ -49,13 +54,6 @@ int			Taskmaster::initialization( const char** env )
 
 	LOG_INFO(LOG_CATEGORY_INIT, "PID: " << ::getpid())
 
-	if (this->loadConfigFile(TM_DEF_CONFIGPATH))
-	{
-		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
-		return EXIT_FAILURE;
-	}
-
-
 	LOG_INFO(LOG_CATEGORY_INIT, "Initialization done.")
 
 	return EXIT_SUCCESS;
@@ -84,6 +82,8 @@ void		Taskmaster::initCategories( void ) const
 /* 
 	Methods implementation
 */
+
+
 
 
 /*
@@ -333,17 +333,30 @@ int			Taskmaster::_parseConfigPrograms( void )
 
 int			Taskmaster::_parseConfigServer( void )
 {
+	if (this->_config[TM_FIELD_SERVER][TM_FIELD_WORKINGDIR])
+		this->setWorkingdir(this->_config[TM_FIELD_SERVER][TM_FIELD_WORKINGDIR].as<std::string>());
+
+
 	if (this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR])
 	{
 		this->_logcolor = this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR].as<bool>();
 		Tintin_reporter::GetInstance().setColor(this->_logcolor);
 	}
-	if (this->_config[TM_FIELD_SERVER][TM_FIELD_WORKINGDIR])
-	{
-		this->setWorkingdir(this->_config[TM_FIELD_SERVER][TM_FIELD_WORKINGDIR].as<std::string>());
-	}
+	else
+		this->_logcolor = TM_DEF_LOGCOLOR;
+
+
+	if (this->_config[TM_FIELD_SERVER][TM_FIELD_LOGDIR])
+		this->setLogdir(this->_config[TM_FIELD_SERVER][TM_FIELD_LOGDIR].as<std::string>());
+	else
+		this->setLogdir(TM_DEF_LOGDIR);
+
 	return EXIT_SUCCESS;
 }
+
+
+
+
 
 const char**		Taskmaster::getEnv( void ) const
 {
@@ -355,24 +368,30 @@ void		Taskmaster::setEnv( const char ** env)
 	this->_parentEnv.store(env);
 }
 
+
 void		Taskmaster::setWorkingdir( const std::string & path)
 {
 	if (chdir(path.c_str()))
 	{
 		LOG_ERROR(LOG_CATEGORY_CONFIG, "Failed to `chdir` : " << strerror(errno))
+		LOG_ERROR(LOG_CATEGORY_CONFIG, "Current directory stay at " << this->_workingdir)
 		return ;
 	}
 	LOG_INFO(LOG_CATEGORY_CONFIG, "Workingdir set to `" << path.c_str() << "`.")
 	this->_workingdir = path;
 }
 
+
 const std::string&		Taskmaster::getWorkingdir( void ) const
 {
 	return this->_workingdir;
 }
 
+
 int			Taskmaster::loadConfigFile(const std::string & path)
 {
+	std::lock_guard<std::mutex> lock(this->_internal_mutex);
+	
 	try {
 
 		if (this->_config.loadConfigFile(path) == EXIT_FAILURE)
@@ -412,6 +431,9 @@ int			Taskmaster::reloadConfigFile( void )
 }
 
 
+
+
+
 /*
 ** --------------------------------- SERVER ---------------------------------
 */
@@ -442,4 +464,21 @@ void		Taskmaster::operator()( void )
 	}
 	LOG_INFO(LOG_CATEGORY_DEFAULT, THREADTAG_TASKMASTER << "End")
 	return ;
+}
+
+/*
+** --------------------------------- GETTERS AND SETTERS ---------------------------------
+*/
+
+const std::string&			Taskmaster::getLogdir( void ) const
+{
+	return this->_logdir;
+}
+
+void						Taskmaster::setLogdir( const std::string & path )
+{
+	if (path.back() != '/')
+		this->_logdir = path + '/';
+	else
+		this->_logdir = path;
 }

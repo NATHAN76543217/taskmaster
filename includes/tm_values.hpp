@@ -33,14 +33,16 @@ typedef enum job_status child_status;
 // 	terminated
 // };
 
-# define TM_DEF_MAX_CONNECTIONS 3
-# define TM_DEF_CONFIGPATH "./config_test.yaml"
+# define TM_DEF_CONFIGPATH	"./config_test.yaml"
 // # define TM_DEF_CONFIGPATH "./config_template.yaml"
-# define TM_DEF_LOCKPATH "./test.lock"
-// # define TM_DEF_LOCKPATH "/var/lock/taskmaster.lock"
-# define TM_DEF_LOGCOLOR false
-# define TM_DEF_LOGPATH "/var/log/taskmaster/taskmaster.log"
-# define TM_DEF_PWD "/var/log/taskmaster/taskmaster.log"
+# define TM_DEF_LOCKPATH	"/var/lock/matt_daemon.lock"
+
+/* Server default values */
+# define TM_DEF_MAX_CONNECTIONS 3
+# define TM_DEF_LOGCOLOR	false
+# define TM_DEF_LOGDIR		"/var/log/matt_daemon/"
+# define TM_DEF_PWD			"/var"
+
 /* Programs default values */
 
 # define TM_DEF_NBPROCS		1
@@ -60,6 +62,7 @@ typedef enum job_status child_status;
 
 # define TM_FIELD_SERVER		"server"
 # define TM_FIELD_LOGCOLOR		"logcolor"
+# define TM_FIELD_LOGDIR		"logdir"
 # define TM_FIELD_PROGRAMS		"programs"
 # define TM_FIELD_CMD			"cmd"
 # define TM_FIELD_NBPROCS		"nbprocs"

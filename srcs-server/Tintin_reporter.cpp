@@ -15,7 +15,7 @@ std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::q
 */
 
 Tintin_reporter::Tintin_reporter(const std::string &defaultFile) : 
-																AThread<Tintin_reporter>(*this, defaultFile),
+																AThread<Tintin_reporter>(*this, "Tintin_reporter"),
 																_defaultCategory(LOG_CATEGORY_DEFAULT),
 																_timestamp_format(LOG_TIMESTAMP_CURRENT),
 																_starttime(),
@@ -23,7 +23,7 @@ Tintin_reporter::Tintin_reporter(const std::string &defaultFile) :
 																_mutexUpdate()
 {
 	this->addDefaultCategory(defaultFile);
-	this->_starttime = CronType::now();
+	this->_starttime = Tintin_reporter::getTimestamp();
 }
 
 /*
@@ -88,8 +88,8 @@ void				Tintin_reporter::operator()( void )
 			}
 			if (this->_running == false)
 			{
-				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_LOGGER, "", CronType::now(), "End."));
-				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_THREAD, "", CronType::now(), "Thread end."));
+				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_LOGGER, "", Tintin_reporter::getTimestamp(), "End."));
+				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_THREAD, "", Tintin_reporter::getTimestamp(), "Thread end."));
 				break;
 			}
 		}
@@ -244,7 +244,7 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 		return EXIT_SUCCESS;
 	}
 
-	new_category.filename = outfile;
+	new_category.filename = this->getLogdir() + outfile;
 	std::map<std::string, Tintin_reporter::log_destination>::iterator cat_dst = this->_opened_files.find(new_category.filename);
 	if (cat_dst != this->_opened_files.end())
 	{
@@ -491,6 +491,18 @@ bool Tintin_reporter::getColor(void) const
 {
 	return this->_color_enabled;
 }
+
+
+const std::string & Tintin_reporter::getLogdir( void ) const
+{
+	return this->_logDirectory;
+}
+
+void				Tintin_reporter::setLogdir( const std::string & path )
+{
+	this->_logDirectory = path;
+}
+
 
 
 /* ************************************************************************** */

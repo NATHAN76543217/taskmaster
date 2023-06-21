@@ -34,6 +34,7 @@
 //TODO wait all child are waitpid'd before stoping signal thread
 //DONE Move timestamp creation in a way to have the timestamp of emiting the message and not the timestamp of writing.
 //TODO Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
+//TODO on pwd and logpath, add a way to create intermediate directories to this path
 
 class ClientData
 {
