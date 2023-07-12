@@ -12,12 +12,16 @@
 #include "ftxui/component/component_options.hpp"
 
 # define TM_CLIENT_VERSION "0.0.1"
+// #include "dom.hpp"
 
 //TODO log disconnetion in taskmasterctl
 class ClientData
 {
     // data storage for client to use in handlers
 };
+
+
+
 
 class TaskmasterClientHandler : public ClientHandler<TaskmasterClientHandler, ClientData>
 {
@@ -95,136 +99,24 @@ int main(int ac, char **av)
     // } while (client->wait_update());
     
     // delete client;
+	// auto screen = ScreenInteractive::Fullscreen();
 
-{
+	// SplitLayoutState splitLayoutState;
+	// splitLayoutState.serverStatusSize = RELATIVE_Y(30);
+	// splitLayoutState.jobListSize = RELATIVE_Y(48);
+	// splitLayoutState.configEditorSize = RELATIVE_Y(70);
+	// splitLayoutState.contentSize = RELATIVE_X(50);
+	// splitLayoutState.mainContentSize = RELATIVE_Y(90);
+
+	// auto contentContainer = leftTab(splitLayoutState);
+	// contentContainer = ResizableSplitRight(rightTab(splitLayoutState), contentContainer, &splitLayoutState.contentSize);
+
+	// auto mainContainer = TopBarComponent();
+	// mainContainer = ResizableSplitBottom(contentContainer, mainContainer, &splitLayoutState.mainContentSize);
+
+	// using namespace ftxui;
 
 
-	using namespace ftxui;
-
-	// auto summary = [&] {
-	// 	auto content = vbox({
-	// 		hbox({text(L"- done:   "), text(L"3") | bold}) | color(Color::Green),
-	// 		hbox({text(L"- done:   "), text(L"3") | bold}) | color(Color::Green),
-	// 		hbox({text(L"- active: "), text(L"2") | bold}) | color(Color::RedLight),
-	// 		hbox({text(L"- queue:  "), text(L"9") | bold}) | color(Color::Red),
-	// 	});
-	// 	return window(text(L" Summary "), content);
-	// };
-
-	// auto document =  //
-	// 	vbox({
-	// 		hbox({
-	// 			summary(),
-	// 			summary(),
-	// 			summary() | flex,
-	// 		}),
-	// 		summary(),
-	// 		summary(),
-	// 	});
-
-	// // Limit the size of the document to 80 char.
-	// document = document | size(WIDTH, LESS_THAN, 80);
-
-	// auto screen = Screen::Create(Dimension::Full(), Dimension::Fit(document));
-	// Render(screen, document);
-
-// 	auto screen = ScreenInteractive::Fullscreen();
-
-//   int tab_index = 0;
-//   int main_menu_index = 0;
-//   std::vector<std::string> tab_entries = {
-// //       "htop", "color", "spinner", "gauge", "compiler", "paragraph",
-// //   };
-//   std::vector<std::string> main_menu = {
-//       "connect", "client config", "client info"
-//   };
-
-//     Elements line1;
-// 	line1.push_back(text("line1") | bold | hcenter);
-//   auto tab_selection =
-//       Menu(&tab_entries, &tab_index, MenuOption::VerticalAnimated());
-//   auto tab_commands =
-//       Menu(&main_menu, &main_menu_index, MenuOption::VerticalAnimated()) | center;
-// 	auto shell_placeholder = vbox({
-// 		line1
-// 	});
-// //   auto main_container = Container::Vertical({
-// //       tab_selection,
-// //     //   tab_content,
-// //   });
-//     Elements line2;
-// 	line2.push_back(text("line2") | bold | hcenter);
-//     Elements line3;
-// 	line3.push_back(text("line3") | bold | hcenter);
-
-//     Elements description_box;
-// 	description_box.push_back(text("Description") | bold | hcenter);
-
-//     auto main_container = Container::Horizontal({
-//       Container::Vertical({
-//           Container::Horizontal({
-// 			tab_selection,
-// 	        // line1
-//           })| border,
-// 		  tab_commands,
-//       }),
-// 	//   shell_placeholder
-// 	        // line3
-//   });
-
-//  auto main_renderer = Renderer(main_container, [&] {
-//     return vbox({
-//         text("Taskmasterctl") | bold | hcenter,
-//         hbox({
-// 		// description_box | border,
-// 		tab_selection->Render() | border,
-// 		tab_commands->Render() | border,
-            //   spinner(i, index) | bold,
-
-// 		}),
-//         // tab_content->Render() | flex,
-// 		shell_placeholder
-//     });
-//   });
-
-// 	std::cout << screen.ToString() << '\0' << std::endl;
-	
-// 	screen.Loop(main_renderer);
-	
-// 	  auto screen = ScreenInteractive::Fullscreen();
- 
-//   auto leftcontainer = Renderer([] { return text("left container") | size(HEIGHT, EQUAL, 20) | center ; });
-//   auto left = Renderer([] { return text("Left") | center; });
-//   auto right = Renderer([] { return text("right") | center; });
-//   auto top2 = Renderer([] { return text("top2") | center; });
-//   auto top3 = Renderer([] { return text("top3") | center; });
-//   auto top = Renderer([] { return text("top") | center; });
-//   auto middle = Renderer([] { return text("middle") | size(HEIGHT, EQUAL, 20) | center ; });
-//   auto bottom = Renderer([] { return text("bottom") | center; });
- 
-// //   int left_size = 20;
-//   int right_size = 20;
-//   int top_size = 10;
-// //   int bottom_size = 10;
- 
-//   auto container_top = top;
-//   auto container_middle = middle;
-//   auto container_bottom = bottom;
-// //   container = ResizableSplitLeft(tab_commands, container, &left_size);
-//   container_bottom = ResizableSplitRight(right, container_bottom, &right_size);
-//     container_middle = ResizableSplitBottom(bottom, container_middle, &top_size);
-//     container_top = ResizableSplitBottom(middle, container_top, &top_size);
-//     // container = ResizableSplitTop(top3, container, &top_size);
-// //   container = ResizableSplitBottom(bottom, container, &bottom_size);
- 
-//   auto renderer =
-//       Container::Vertical({ container_top->Render() | border, container_bottom->Render()});
- 
-// //   screen.Print(renderer);
-//   screen.Loop(renderer);
-
-// }
-//     return (EXIT_SUCCESS);
 using namespace ftxui;
 
     int main_menu_index = 0;
@@ -308,9 +200,12 @@ using namespace ftxui;
 
     //   screen.Print(renderer);
     screen.Loop(renderer);
+	// auto renderer = Renderer(mainContainer, [&] { return mainContainer->Render() | border; });
+
+	// screen.Loop(renderer);
 
     return (EXIT_SUCCESS);
-}
+
 }
 
 

@@ -25,7 +25,7 @@ else
 		endif
     else ifeq ($(UNAME_S),Darwin)
         OS_DETECTED 		=	OSX
-		CPP_CMP_FLAGS		+=	-D$(OS_DETECTED) -std=c++11
+		CPP_CMP_FLAGS		+=	-D$(OS_DETECTED) -std=c++17
 		ifeq ($(LANG),C)
 			COMP		=	clang
 		else ifeq ($(LANG),C++)

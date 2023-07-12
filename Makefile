@@ -34,7 +34,9 @@ LOG_DIR		= logs
 # - make will check for the file in SRC_DIR
 # - use "-" if empty
 SRCS_SERVER		=	main.cpp Taskmaster.cpp Tintin_reporter.cpp Config.cpp Config.cpp Job.cpp
-SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp
+
+SRCS_CLIENT		=	main.cpp Tintin_reporter.cpp \
+					TopBarComponent.cpp TabComponents.cpp ServerStatusComponent.cpp RemoteShellComponent.cpp OutputLogComponent.cpp ConfigEditorComponent.cpp JobListComponent.cpp 
  
 HEADERS			=	Taskmaster.hpp Tintin_reporter.hpp ntos.hpp Config.hpp Job.hpp tm_values.hpp \
 					client.hpp dto_base.hpp packed_data.hpp packet.hpp server.hpp
