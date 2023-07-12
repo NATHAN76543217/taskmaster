@@ -11,6 +11,7 @@
 #include "ftxui/component/component_base.hpp"
 #include "ftxui/component/component_options.hpp"
 
+# define TM_CLIENT_VERSION "0.0.1"
 
 //TODO log disconnetion in taskmasterctl
 class ClientData
@@ -55,8 +56,8 @@ int main(int ac, char **av)
 
 	ARG_INIT(
 		ARG_GROUP("server", "Daemonized server running taskmaster",
-			ARG<std::string>("-i", "--ip", "ip address of taskmaster server", &serverIp, ARG_REQUIRED),
-			ARG<int>("-p", "--port", "port of taskmaster server", &serverPort, ARG_REQUIRED)
+			ARG<std::string>("-i", "--ip", "ip address of taskmaster server", &serverIp, ARG_NOFLAGS ),
+			ARG<int>("-p", "--port", "port of taskmaster server", &serverPort, ARG_NOFLAGS )
 		),
 		ARG_NOVALUE("-h", "--help", "shows this usage", &help)
 	);
@@ -86,14 +87,14 @@ int main(int ac, char **av)
     #endif
 
 
-    Client<TaskmasterClientHandler> *client = new Client<TaskmasterClientHandler>(serverIp, serverPort);
-    client->connect();
+    // Client<TaskmasterClientHandler> *client = new Client<TaskmasterClientHandler>(serverIp, serverPort);
+    // client->connect();
 
-    do
-    {
-    } while (client->wait_update());
+    // do
+    // {
+    // } while (client->wait_update());
     
-    delete client;
+    // delete client;
 
 {
 
@@ -239,7 +240,7 @@ using namespace ftxui;
     auto screen = ScreenInteractive::Fullscreen();
 
     // top
-    auto topBar = Renderer([] { return text("Taskmaster Client (v 0.0.0)") | center; });
+    auto topBar = Renderer([] { return text("Taskmaster Client (v " TM_CLIENT_VERSION ")") | center; });
 
 	# define TEXT_COLOR Color(200, 200, 200)
 	# define BORDER_COLOR Color::White
