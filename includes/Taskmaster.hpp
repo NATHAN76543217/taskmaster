@@ -21,18 +21,19 @@
 class Taskmaster : public virtual AThread<Taskmaster>
 {
 	private:
-		Config					_config;
+		Config						_config;
 		/* Config values */
 		
-		std::string		_workingdir;
-		std::string		_logdir;
-		uint			_max_connections;
-		bool			_logcolor;
+		std::string					_workingdir;
+		std::string					_logdir;
+		uint						_max_connections;
+		bool						_logcolor;
 		std::atomic<const char**>	_parentEnv; 
-		std::list<Job>			_joblist;
+		std::list<Job>				_joblist;
 
 	protected:
-		/* Constructor */
+
+	/* Constructor */
 		Taskmaster(const std::string & name = "Taskmaster") :
 			AThread(*this, name),
 			_workingdir(""),
@@ -57,30 +58,29 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		/* Destructor */
 		~Taskmaster() {}
 
-		/* Uniq instance */
-		// static Taskmaster* taskmaster_;
-
 		int			_parseConfigServer( void );
 		int			_parseConfigPrograms( void );
 
-
-
 	public:
 
-		static Taskmaster&		CreateInstance( const std::string & name );
-		static void				Destroy( void );
+		static Taskmaster&			CreateInstance( const std::string & name );
+		static void					Destroy( void );
 
-		void					operator()( void );
+		static	uint				getFieldStopSignal(YAML::const_iterator &it);
+		static const std::string	getFieldStdout(YAML::const_iterator & it);
+		void						operator()( void );
 
+		void						startAll( void );
 
 		/* Init */
-		int			initialization( const char** env );
-		void		initCategories( void ) const;
+		int					initialization( const char** env );
+		void				initCategories( void ) const;
 
-		void		setWorkingdir( const std::string & str);
-		const std::string&		getWorkingdir( void ) const;
-		int			loadConfigFile(const std::string & path);
-		int			reloadConfigFile( void );
+		void				setWorkingdir( const std::string & str);
+		const std::string&	getWorkingdir( void ) const;
+
+		int					loadConfigFile(const std::string & path);
+		int					reloadConfigFile( void );
 
 		/* Getters and Setters */		
 		const std::string & getLogdir( void ) const;
@@ -89,7 +89,6 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		const char**		getEnv( void ) const;
 		void				setEnv( const char **env);
 
-	// friend class JobManager;
 	friend class JobManager;
 	friend class AThread;
 };

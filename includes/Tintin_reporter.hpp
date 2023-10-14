@@ -9,6 +9,7 @@
 # include <queue>
 # include <map>
 # include <chrono>
+# include <cstdlib>
 
 # include <ntos.hpp>
 
@@ -87,6 +88,12 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 
 		struct log_category
 		{
+			log_category(std::string name_ = "", std::string filename_ = "") : 
+				name(name_), filename(filename_)
+			{}
+			log_category(const Tintin_reporter::log_category & src) : 
+				name(src.name), filename(src.filename)
+			{}
 			std::string		name;
 			std::string		filename;
 		};
@@ -112,7 +119,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		std::map<std::string, log_destination>	_opened_files;
 		std::map<std::string, log_category>		_categories;
 		std::map<std::thread::id, std::string>	_threadnames;
-		std::string								_defaultCategory;
+		std::string								_defaultCategoryName;
 		std::string								_logDirectory;
 		uint									_timestamp_format;
 		CronType::time_point					_starttime;
@@ -125,7 +132,8 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 	protected:
 
 		void						_log(const log_message & message);
-		void						addDefaultCategory(const std::string & outfile);
+		void						attachCategoryToDestination(Tintin_reporter::log_category & category, const std::string & filename);
+		void						detachCategoryFromDestination(const log_category & category);
 
 		Tintin_reporter::log_destination	newLogDestination( void ) const;
 		Tintin_reporter::log_destination	newLogDestinationStdout( void ) const;
@@ -168,6 +176,7 @@ class Tintin_reporter : public virtual AThread<Tintin_reporter>
 		uint				getNbOpenfiles( void ) const;
 		std::string			getTimestampStr(const CronType::time_point & timestamp) const;
 		const std::string&	getDefaultCategory( void ) const;
+		std::string			formatFilename(const std::string & filename) const;
 		std::string			formatCategoryName( const std::string & categoryName) const;
 		int					addCategory(const std::string & str, const std::string & outfile = "");
 		void				addThreadName( const std::thread::id id, const std::string & name );

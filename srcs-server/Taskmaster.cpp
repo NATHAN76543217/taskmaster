@@ -20,6 +20,7 @@ Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
 		return TM;
 	}
+
 	Tintin_reporter& logger = Tintin_reporter::CreateInstance(TM.getLogdir(), "default.log");
 #if LOG_CATEGORY_AUTO == false
 	TM.initCategories();
@@ -74,15 +75,17 @@ void		Taskmaster::initCategories( void ) const
 	// Tintin_reporter::getLogManager(LOG_STDOUT_MAGIC).addCategory(LOG_CATEGORY_DEFAULT);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_DEFAULT);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_LOGGER, LOG_STDOUT_MAGIC);
+	// Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_LOGGER);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_INIT);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_MAIN);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_NETWORK);
-	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
-	// Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL);
+	// Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL, "./signal.log");
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_SIGNAL);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_CONFIG);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JOB);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JM);
-	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_THREAD, "./thread.log");
+	// Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_THREAD, "./thread.log");
+	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_THREAD);
 }
 
 
@@ -90,6 +93,17 @@ void		Taskmaster::initCategories( void ) const
 	Methods implementation
 */
 
+void		Taskmaster::startAll( void )
+{
+	std::cout << "BEFORE" << std::endl;
+
+	Tintin_reporter::GetInstance().start();
+	SignalCatcher::GetInstance().start();
+	JobManager::GetInstance().start();
+	this->start();
+	std::cout << "AFTER" << std::endl;
+
+}
 
 
 
@@ -100,13 +114,14 @@ void		Taskmaster::initCategories( void ) const
 
 int			Taskmaster::_parseConfigPrograms( void )
 {
-	std::list<Job> newJoblist ;
-	Job job;
-	bool isInvalid = false;
+	Job				job;
+	bool			isInvalid = false;
+	std::list<Job>	newJoblist;
 
 	YAML::Node topnode = this->_config[TM_FIELD_PROGRAMS];
 	
-	for(YAML::const_iterator it=topnode.begin();it!=topnode.end();++it) {
+	for(YAML::const_iterator it = topnode.begin(); it != topnode.end(); ++it)
+	{
 		isInvalid = false;
 		job.resetDefault();
 
@@ -262,48 +277,9 @@ int			Taskmaster::_parseConfigPrograms( void )
 		}
 
 
-		if (it->second[TM_FIELD_STOPSIGNAL])
-		{
-			//TODO optimize this function
-			uint signal = TM_DEF_STOPSIGNAL;
-			std::string sigstr = it->second[TM_FIELD_STOPSIGNAL].as<std::string>();
-			if (sigstr == "SIGHUP")
-				signal = 1;
-			else if (sigstr == "SIGINT")
-				signal = 2;
-			else if (sigstr == "SIGUSR1")
-				signal = 30;
-			else if (sigstr == "SIGUSR2")
-				signal = 31;
-			else
-			{
-				try {
-					signal = std::stoi(sigstr);
-					if (signal > 31 || signal < 1)
-					{
-						signal = TM_DEF_STOPSIGNAL;
-						LOG_WARN(LOG_CATEGORY_CONFIG, "Invalid value for field '" + ntos(TM_FIELD_STOPSIGNAL) + "' on job '" + job.getName() + "'. (Out of Range)")
-					}
-				}
-				catch (std::exception & e)
-				{
-					LOG_WARN(LOG_CATEGORY_CONFIG, "Invalid value for field '" + ntos(TM_FIELD_STOPSIGNAL) + "' on job '" + job.getName() + "'.")
-				}
-			}
-			job.setStopSignal(signal);
-		}
+		job.setStopSignal(Taskmaster::getFieldStopSignal(it));
+		job.setStdout(Taskmaster::getFieldStdout(it));
 
-
-//REVIEW add a switch to check at config load if stdout/err file is
-		if (it->second[TM_FIELD_STDOUT])
-		{
-			std::string stdout = it->second[TM_FIELD_STDOUT].as<std::string>();
-			// if (stdout == "allow" || stdout == "discard")
-			// 	job.setStdout(stdout);
-			// else if ()
-				job.setStdout(stdout);
-
-		}
 		if (it->second[TM_FIELD_STDERR])
 			job.setStderr(it->second[TM_FIELD_STDERR].as<std::string>());
 
@@ -321,7 +297,6 @@ int			Taskmaster::_parseConfigPrograms( void )
 
 
 		}
-
 
 
 		if (isInvalid)
@@ -386,6 +361,7 @@ void		Taskmaster::setWorkingdir( const std::string & path)
 	}
 	LOG_INFO(LOG_CATEGORY_CONFIG, "Workingdir set to `" << path.c_str() << "`.")
 	this->_workingdir = path;
+	std::cout << ">> " << "PATH = " << path << std::endl;
 }
 
 
@@ -488,4 +464,52 @@ void						Taskmaster::setLogdir( const std::string & path )
 		this->_logdir = path + '/';
 	else
 		this->_logdir = path;
+}
+
+// For config
+
+//REVIEW add a switch to check at config load if stdout/err file is
+const std::string		Taskmaster::getFieldStdout(YAML::const_iterator & it)
+{
+	if (it->second[TM_FIELD_STDOUT])
+		return TM_FIELD_STDOUT;
+	std::string stream = it->second[TM_FIELD_STDOUT].as<std::string>();
+	return stream;	
+	// if (stdout == "allow" || stdout == "discard")
+	// 	job.setStdout(stdout);
+	// else if ()
+}
+
+uint					Taskmaster::getFieldStopSignal(YAML::const_iterator& it)
+{
+	if (!(it->second[TM_FIELD_STOPSIGNAL]))
+		return TM_DEF_STOPSIGNAL;
+	
+	//TODO optimize this function
+	uint		signal = TM_DEF_STOPSIGNAL;
+	std::string	sigstr = it->second[TM_FIELD_STOPSIGNAL].as<std::string>();
+	if (sigstr == "SIGHUP")
+		signal = 1;
+	else if (sigstr == "SIGINT")
+		signal = 2;
+	else if (sigstr == "SIGUSR1")
+		signal = 30;
+	else if (sigstr == "SIGUSR2")
+		signal = 31;
+	else
+	{
+		try {
+			signal = std::stoi(sigstr);
+			if (signal > 31 || signal < 1)
+			{
+				signal = TM_DEF_STOPSIGNAL;
+				LOG_WARN(LOG_CATEGORY_CONFIG, "Invalid value '" << signal << "' for field '" TM_FIELD_STOPSIGNAL "' on job '" << it->first << "'. (Out of Range)")
+			}
+		}
+		catch (std::exception & e)
+		{
+			LOG_WARN(LOG_CATEGORY_CONFIG, "Invalid value for field '" TM_FIELD_STOPSIGNAL "' on job '" << it->first << "'.")
+		}
+	}
+	return signal;
 }

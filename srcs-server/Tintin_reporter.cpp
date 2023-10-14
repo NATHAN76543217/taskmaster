@@ -1,6 +1,5 @@
 #include "Tintin_reporter.hpp"
 //TODO Improve verbose: say 'new' when new category and say 'set' when relink category (do the same for files)
-//TODO optimize between addCategpry and addDefaultCategory
 
 /*
 ** ------------------------------- Static VAR init --------------------------------
@@ -16,13 +15,15 @@ std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::q
 
 Tintin_reporter::Tintin_reporter(const std::string &defaultFile) : 
 																AThread<Tintin_reporter>(*this, "Tintin_reporter"),
-																_defaultCategory(LOG_CATEGORY_DEFAULT),
+																_defaultCategoryName(LOG_CATEGORY_DEFAULT),
 																_timestamp_format(LOG_TIMESTAMP_CURRENT),
 																_starttime(),
 																_color_enabled(false),
 																_mutexUpdate()
 {
-	this->addDefaultCategory(defaultFile);
+	this->addCategory(this->_defaultCategoryName, formatFilename(defaultFile));
+	if (this->_categories.empty())
+		throw Tintin_reporter::defaultFileException(defaultFile);
 	this->_starttime = Tintin_reporter::getTimestamp();
 }
 
@@ -36,7 +37,7 @@ Tintin_reporter::~Tintin_reporter()
 		 it != this->_opened_files.end();
 		 it++)
 	{
-		if (this->_categories.at(this->_defaultCategory).filename == it->first)
+		if (this->_categories.at(this->_defaultCategoryName).filename == it->first)
 			continue;
 		if (it->second.is_file == true)
 		{
@@ -46,10 +47,10 @@ Tintin_reporter::~Tintin_reporter()
 		}
 	}
 
-	Tintin_reporter::log_destination &default_destination = this->_opened_files.at(this->_categories.at(this->_defaultCategory).filename);
+	Tintin_reporter::log_destination &default_destination = this->_opened_files.at(this->_categories.at(this->_defaultCategoryName).filename);
 	if (default_destination.is_file == true)
 	{
-		// LOG_DEBUG(LOG_CATEGORY_LOGGER, "Closing file '" + this->_categories.at(this->_defaultCategory).filename + "'.")
+		// LOG_DEBUG(LOG_CATEGORY_LOGGER, "Closing file '" + this->_categories.at(this->_defaultCategoryName).filename + "'.")
 		static_cast<std::ofstream &>(default_destination.output).close();
 		delete &(default_destination.output);
 	}
@@ -73,7 +74,7 @@ void				Tintin_reporter::operator()( void )
 
 	std::unique_lock<std::mutex> update_lock(this->_mutexUpdate);
 
-	LOG_INFO(LOG_CATEGORY_LOGGER, "Logger thread mutex taken.");
+	LOG_DEBUG(LOG_CATEGORY_LOGGER, "Logger thread mutex taken.");
 	do {
 		{
 			std::lock_guard<std::mutex> intern_lock(this->_internal_mutex);
@@ -152,22 +153,60 @@ Tintin_reporter::log_destination Tintin_reporter::newLogDestination(void) const
 
 Tintin_reporter::log_destination Tintin_reporter::newLogDestinationStdout(void) const
 {
-	Tintin_reporter::log_destination dst(false, 1, std::cout);
-
-	return dst;
+	return Tintin_reporter::log_destination(false, 1, std::cout);
 }
 
 Tintin_reporter::log_destination Tintin_reporter::newLogDestinationStderr(void) const
 {
-	Tintin_reporter::log_destination dst(false, 1, std::cerr);
+	return Tintin_reporter::log_destination(false, 1, std::cerr);
+}
 
-	return dst;
+/*
+	TODO: remove leading ./ and replace by ether cwd or logdir
+
+*/
+std::string Tintin_reporter::formatFilename(const std::string & filename) const
+{
+	if (filename.empty() || filename == LOG_STDOUT_MAGIC)
+		return LOG_STDOUT_MAGIC;
+	else if (filename == LOG_STDERR_MAGIC)
+		return LOG_STDERR_MAGIC;
+
+	std::string new_filename = filename;
+	if (filename.at(0) != '/')
+	{
+
+		new_filename = this->getLogdir() + filename;
+	}
+
+	/*
+		Remove /./ from path
+	*/
+	size_t pos = 0;
+	while (( pos = new_filename.find("/./")) != std::string::npos)
+	{
+		new_filename.erase(new_filename.begin() + pos, new_filename.begin() + pos + 2);
+	}
+
+
+	// char pwd[PATH_MAX];
+	// getcwd(pwd);
+	// std::cout << "!!" << filename << " | " << path << std::endl;
+	return std::string(new_filename);
+	// else if (filename.at(0) == '.')
+	// {
+	// 	if (filename.at(1) == '.')
+	// 	{
+	// 	}
+	// }
 }
 
 std::string Tintin_reporter::formatCategoryName(const std::string &categoryName) const
 {
 	std::string formatedName(categoryName);
 
+	if (formatedName.empty())
+		return LOG_CATEGORY_DEFAULT;
 	if (categoryName.size() > LOG_CATEGORY_NAME_MAXSIZE)
 		formatedName = categoryName.substr(0, LOG_CATEGORY_NAME_MAXSIZE);
 	else
@@ -175,48 +214,63 @@ std::string Tintin_reporter::formatCategoryName(const std::string &categoryName)
 	return formatedName;
 }
 
-void Tintin_reporter::addDefaultCategory(const std::string &defaultOutputFile)
+/* 
+	Don't detach a previous attachment for now 
+	Use category with standardized path/filename
+*/
+void Tintin_reporter::attachCategoryToDestination(Tintin_reporter::log_category & category, const std::string & filename)
 {
-	if (this->_categories.empty() == false)
-		return;
+	std::map<std::string, Tintin_reporter::log_destination>::iterator dest_iterator = this->_opened_files.find(filename);
+	if (dest_iterator != this->_opened_files.end())
+	{
+		/* Destination file already exist, just link to it */
+		category.filename = filename;
+		dest_iterator->second.nb_references++;
+		// LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category '" + category.name + "' linked to '" + category.filename + "'.")
+		return ;
+	}
 
-	/* Add default category */
-
-	Tintin_reporter::log_category category;
-	category.name = formatCategoryName(this->_defaultCategory);
-	category.filename = defaultOutputFile;
-
-	this->_categories.insert(std::make_pair(this->_defaultCategory, category));
-
-	/* Open default file */
-	std::map<std::string, Tintin_reporter::log_destination>::iterator def_logdest;
-
-	if (category.filename == LOG_STDOUT_MAGIC)
-		def_logdest = this->_opened_files.insert(std::make_pair(category.filename, newLogDestinationStdout())).first;
-	else if (category.filename == LOG_STDERR_MAGIC)
-		def_logdest = this->_opened_files.insert(std::make_pair(category.filename, newLogDestinationStderr())).first;
+	/* Not already exist*/
+	if (filename.empty() || filename == LOG_STDOUT_MAGIC)
+		this->_opened_files.insert(std::make_pair(filename, newLogDestinationStdout()));
+	else if (filename == LOG_STDERR_MAGIC)
+		this->_opened_files.insert(std::make_pair(filename, newLogDestinationStderr()));
 	else
 	{
-		def_logdest = this->_opened_files.insert(std::make_pair(defaultOutputFile, newLogDestination())).first;
-		std::ofstream &dst_of = static_cast<std::ofstream &>(def_logdest->second.output);
-		dst_of.open(defaultOutputFile, std::ofstream::app);
-		if (dst_of.fail())
+		dest_iterator = this->_opened_files.insert(std::make_pair(filename, newLogDestination())).first;
+		std::ofstream &destination_ofstream = static_cast<std::ofstream &>(dest_iterator->second.output);
+		/* File creation here */
+		destination_ofstream.open(category.filename, std::ofstream::app);
+		if (destination_ofstream.fail())
 		{
-			this->_categories.erase(this->_defaultCategory);
-			this->_opened_files.erase(defaultOutputFile);
-			throw Tintin_reporter::defaultFileException(defaultOutputFile);
+			// LOG_ERROR(LOG_CATEGORY_LOGGER, "Failed to open file '" + category.filename + "'.")
+			// LOG_WARN(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' equal to '" + this->_categories.at(this->_defaultCategoryName).filename + "'.")
+			this->_opened_files.erase(category.filename);
+			// this->_categories[Category].name = this->_categories[this->_defaultCategoryName].name;
+			category.filename = this->_categories.at(this->_defaultCategoryName).filename;
+			return ;
 		}
 	}
-	/* Add category 'LOGGER' */
-
-	std::string loggerName = formatCategoryName(LOG_CATEGORY_LOGGER);
-	this->_categories[LOG_CATEGORY_LOGGER].name = loggerName;
-	this->_categories[LOG_CATEGORY_LOGGER].filename = defaultOutputFile;
-	def_logdest->second.nb_references++;
-	// log(LOG_LEVEL_DEBUG, LOG_CATEGORY_LOGGER, "New category added '" + this->_defaultCategory + "' pointing to '" + defaultOutputFile + "'.");
-	// log(LOG_LEVEL_DEBUG, LOG_CATEGORY_LOGGER, "New category added '" LOG_CATEGORY_LOGGER "' pointing to '" + defaultOutputFile + "'.");
+	category.filename = filename;
 }
 
+void Tintin_reporter::detachCategoryFromDestination(const Tintin_reporter::log_category & category)
+{
+	std::map<std::string, Tintin_reporter::log_destination>::iterator dest_iterator = this->_opened_files.find(category.filename);
+	if (dest_iterator == this->_opened_files.end())
+		return ;
+	dest_iterator->second.nb_references--;
+	//TODO clean unified file close
+	if (dest_iterator->second.nb_references == 0)
+	{
+		if (dest_iterator->second.is_file)
+		{
+			static_cast<std::ofstream &>(dest_iterator->second.output).close();
+			// LOG_INFO(LOG_CATEGORY_LOGGER, "Closing file '" + category->second.filename + "'")
+		}
+		this->_opened_files.erase(category.filename);
+	}
+}
 
 int Tintin_reporter::addCategory(const std::string &CategoryName, const std::string &outfile)
 {
@@ -224,69 +278,24 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 	std::map<std::string, Tintin_reporter::log_category>::iterator cat_it = this->_categories.find(CategoryName);
 	if (cat_it != this->_categories.end())
 	{
-		log_destination &old_dst = this->_opened_files.at(cat_it->second.filename);
-		old_dst.nb_references--;
-		if (old_dst.nb_references == 0)
-		{
-			if (old_dst.is_file)
-			{
-				static_cast<std::ofstream &>(old_dst.output).close();
-				// LOG_INFO(LOG_CATEGORY_LOGGER, "Closing file '" + cat_it->second.filename + "'")
-			}
-			this->_opened_files.erase(cat_it->second.filename);
-		}
-	}
-
-	Tintin_reporter::log_category & new_category = this->_categories.insert(std::make_pair(CategoryName, Tintin_reporter::log_category())).first->second;
-	new_category.name = formatCategoryName(CategoryName);
-	if (outfile.empty())
-	{
-		/* If no filename provided, log to default file */
-		new_category.filename = this->_categories.at(this->_defaultCategory).filename;
-		this->_opened_files.at(new_category.filename).nb_references++;
-		LOG_DEBUG(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' point to default file (No filename provided).")
-		return EXIT_SUCCESS;
-	}
-	if (outfile != LOG_STDOUT_MAGIC && outfile != LOG_STDOUT_MAGIC)
-		new_category.filename = this->getLogdir() + outfile;
-	else
-		new_category.filename = outfile;
-	
-	std::map<std::string, Tintin_reporter::log_destination>::iterator cat_dst = this->_opened_files.find(new_category.filename);
-	if (cat_dst != this->_opened_files.end())
-	{
-		/* Destination file already exist, just link to it */
-		cat_dst->second.nb_references++;
-		LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category '" + CategoryName + "' linked to '" + new_category.filename + "'.")
-		return EXIT_SUCCESS;
-	}
-
-	/* Not already exist*/
-	if (new_category.filename == LOG_STDOUT_MAGIC)
-	{
-		this->_opened_files.insert(std::make_pair(new_category.filename, newLogDestinationStdout()));
-	}
-	else if (new_category.filename == LOG_STDERR_MAGIC)
-	{
-		this->_opened_files.insert(std::make_pair(new_category.filename, newLogDestinationStderr()));
+		/* Already existing category */
+		detachCategoryFromDestination(cat_it->second);
+		attachCategoryToDestination(cat_it->second, formatFilename(outfile));
 	}
 	else
 	{
-		cat_dst = this->_opened_files.insert(std::make_pair(new_category.filename, newLogDestination())).first;
-		std::ofstream &destination_ofstream = static_cast<std::ofstream &>(cat_dst->second.output);
-		destination_ofstream.open(outfile, std::ofstream::app);
-		if (destination_ofstream.fail())
-		{
-			// LOG_ERROR(LOG_CATEGORY_LOGGER, "Failed to open file '" + outfile + "'.")
-			// LOG_WARN(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' equal to '" + this->_categories.at(this->_defaultCategory).filename + "'.")
-			this->_opened_files.erase(outfile);
-			// this->_categories[Category].name = this->_categories[this->_defaultCategory].name;
-			new_category.filename = this->_categories.at(this->_defaultCategory).filename;
-		}
+		/* New category */
+		std::map<std::string, Tintin_reporter::log_category>::iterator new_category = this->_categories.insert(std::make_pair(CategoryName, Tintin_reporter::log_category())).first;
+		new_category->second.name = formatCategoryName(CategoryName);
+		attachCategoryToDestination(new_category->second, formatFilename(outfile));
 	}
-	LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category added '" + CategoryName + "' pointing to '" + new_category.filename + "'.")
+
+	// attachCategoryToDestination(*new_category, formatFilename(outfile));
+
+	LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category added '" + formatCategoryName(CategoryName) + "' pointing to '" + formatFilename(outfile) + "'.")
 	return EXIT_SUCCESS;
 }
+
 
 
 
@@ -371,6 +380,7 @@ std::string			Tintin_reporter::getTimestampStr(const CronType::time_point & time
 */
 void Tintin_reporter::_log(const log_message & message)
 {
+	// std::cout << "(" << message.message << ")" << std::endl; // <=== good logger debug
 	std::string active_category = message.category;
 
 #if LOG_CATEGORY_AUTO == true
@@ -379,14 +389,14 @@ void Tintin_reporter::_log(const log_message & message)
 	if (this->_categories.find(active_category) == this->_categories.end() && this->addCategory(active_category) == EXIT_FAILURE)
 	{
 		LOG_CRITICAL(LOG_CATEGORY_LOGGER, "Failed to add category '" + active_category + "' !")
-		active_category = this->_defaultCategory;
+		active_category = this->_defaultCategoryName;
 	}
 #else
 	/* If category don't exist : Use default category */
 	if (this->_categories.find(active_category) == this->_categories.end())
 	{
 		// LOG_WARN(LOG_CATEGORY_LOGGER, "Use of unknown category '" + categoryName + "'.")
-		active_category = this->_defaultCategory;
+		active_category = this->_defaultCategoryName;
 	}
 #endif
 
@@ -442,7 +452,6 @@ void Tintin_reporter::_log(const log_message & message)
 		<< levelPrefix
 		<< message.message
 		<< RESET_ANSI << std::endl;
-
 	return ;
 }
 
@@ -492,7 +501,7 @@ uint Tintin_reporter::getNbCategories(void) const
 
 const std::string &Tintin_reporter::getDefaultCategory(void) const
 {
-	return this->_defaultCategory;
+	return this->_defaultCategoryName;
 }
 
 bool Tintin_reporter::getColor(void) const

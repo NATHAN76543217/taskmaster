@@ -35,6 +35,8 @@
 //DONE Move timestamp creation in a way to have the timestamp of emiting the message and not the timestamp of writing.
 //DONE Write Thread name in log based on the real thread ID. or at least Thread A,B,C or 1, 2, 3
 //TODO On `pwd` and `logpath`, add a way to create intermediate directories to this path
+//TODO fix log files path
+//TODO standardise path for logger (transform all relative path into absolute one)
 
 class ClientData
 {
@@ -86,30 +88,30 @@ int main(int ac, char** av, const char** env)
 		ARG_NOVALUE("-h", "--help", "shows this usage", &help)
 	);
 
-
 	int parsing_failed = ARG_PARSE(ac, av);
 	if (parsing_failed)
 	{
 		ARG_USAGE(" === Taskmaster Server ===");
 		return (EXIT_FAILURE);
 	}
+
 	if (help)
 	{
 		ARG_USAGE(" === Taskmaster Server ===");
 		return (EXIT_SUCCESS);
 	}
-	
+
 	if (isRunningRootPermissions() == false)
 	{
 		std::cerr << "You must have root permissions to run this program. Current UID: " << geteuid() << std::endl;
 		return EXIT_FAILURE;
 	}
 
+	/* Ensure only one instance */
 	if (takeLockFile(TM_DEF_LOCKPATH))
 		return EXIT_FAILURE;
 
 	Taskmaster &TM = Taskmaster::CreateInstance("Taskmaster");
-
 
 
 	if (TM.initialization(env) == EXIT_FAILURE)
@@ -127,10 +129,7 @@ int main(int ac, char** av, const char** env)
 	// }
 	LOG_INFO(LOG_CATEGORY_MAIN, "Start all threads.");
 
-	Tintin_reporter::GetInstance().start();
-	SignalCatcher::GetInstance().start();
-	JobManager::GetInstance().start();
-	TM.start();
+	TM.startAll();
 
 	LOG_INFO(LOG_CATEGORY_MAIN, "Main suspended until taskmaster's end.")
 	TM.waitEnd();
@@ -148,6 +147,7 @@ int main(int ac, char** av, const char** env)
 	std::cout << "Main thread exited" << std::endl;
 	return EXIT_SUCCESS;
 
+}
 
 // 	// TODO daemonize better than this
 // 	int pid = fork();
@@ -179,4 +179,3 @@ int main(int ac, char** av, const char** env)
 //TODO should not close logger in main 
 // 	Tintin_reporter::destroyLogManager();
 // 	return (EXIT_SUCCESS);
-}
