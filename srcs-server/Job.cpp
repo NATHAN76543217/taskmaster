@@ -407,7 +407,10 @@ int				Job::start( void )
 		LOG_INFO(LOG_CATEGORY_JOB,  "[" << this->_name << "] started successfuly.")
 	}
 	else
+	{
+		this->_status = incomplete;
 		LOG_WARN(LOG_CATEGORY_JOB,  "[" << this->_name << "] start incompletly.")
+	}
 	return EXIT_SUCCESS;
 }
 

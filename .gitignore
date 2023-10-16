@@ -10,7 +10,8 @@ taskmaster.code-workspace
 *.lock
 config_test.yaml
 THREAD_NAME
-
+*.gitignore
+tmp*
 # Prerequisites
 *.d
 

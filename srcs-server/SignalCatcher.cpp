@@ -1,11 +1,8 @@
 #include "SignalCatcher.hpp"
 
-
-// std::ostream &			operator<<( std::ostream & o, SignalCatcher const & i )
-// {
-// 	//o << "Value = " << i.getValue();
-// 	return o;
-// }
+void fake_sigchld_handler(int signo) {
+	std::cout << "SIGCHLD : " << signo << std::endl;
+}
 
 void			SignalCatcher::operator()()
 {
@@ -16,7 +13,7 @@ void			SignalCatcher::operator()()
 		lock.unlock();
 	}
 	int		sigReceived = 0;
-	int		stat = 0;
+	int		process_status = 0;
 	pid_t	child_pid = 0;
 
 	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_SIGNALCATCHER << "Thread start")
@@ -24,15 +21,16 @@ void			SignalCatcher::operator()()
 
 	sigemptyset(&(this->_sigSet));
 	sigaddset(&(this->_sigSet), SIGINT);
-	// sigaddset(&(this->_sigSet), SIGTERM);
 	sigaddset(&(this->_sigSet), SIGHUP);
 	sigaddset(&(this->_sigSet), SIGCHLD);
 	sigaddset(&(this->_sigSet), SIGTERM);
 	sigaddset(&(this->_sigSet), SIGSTOP);
 
+	signal(SIGCHLD, fake_sigchld_handler);
+
 	while(this->_running)
 	{
-		LOG_DEBUG(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << " - Wait a signal - ")
+		LOG_DEBUG(LOG_CATEGORY_SIGNAL, " - Wait a signal - ")
 
 		if (sigwait(&(this->_sigSet), &sigReceived) != 0)
 		{
@@ -40,42 +38,43 @@ void			SignalCatcher::operator()()
 			break ;
 		}
 
-		LOG_DEBUG(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "Signal received: N° " << sigReceived << ".")
+		LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Signal received: N° " << sigReceived << ".")
 
-		stat = 0;
+		process_status = 0;
 		child_pid = 0;
 		switch(sigReceived)
 		{
 			case SIGINT:
-				LOG_INFO(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "SIGINT - Stop Taskmaster.")
+				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGINT - Stop Taskmaster.")
 				/* Also Stop SignalCatcher Thread */
 				Taskmaster::GetInstance().stop();
 				// this->stop();
 				goto exit_tag;
-			break ;
+				break ;
 			case SIGHUP:
-				LOG_INFO(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "SIGHUP - Reload config.")
+				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGHUP - Reload config.")
 				Taskmaster::GetInstance().reloadConfigFile();
 
-			break;
+				break;
 			case SIGCHLD:
-				LOG_INFO(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "SIGCHLD - A child had exited.")
-				if ((child_pid = waitpid(0, &stat, 0)) == -1)
+				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGCHLD - A child statuschanged..")
+				if ((child_pid = waitpid(0, &process_status, 0)) == -1) // TODO WNOHANG
 				{
 					LOG_ERROR(LOG_CATEGORY_JM, THREADTAG_SIGNALCATCHER << "Failed to `waitpid` : " << strerror(errno))
 					break ;
 				}
-				JobManager::GetInstance().notifyChildDeath(child_pid, stat);
+				LOG_INFO(LOG_CATEGORY_JM, "Notify child [] changed his status.")
+				JobManager::GetInstance().notifyChildDeath(child_pid, process_status);
 
 			break;
 			default:
-				LOG_ERROR(LOG_CATEGORY_JM, THREADTAG_SIGNALCATCHER << "Invalid signal number (" << sigReceived << ").")
+				LOG_ERROR(LOG_CATEGORY_SIGNAL, "Invalid signal number (" << sigReceived << ").")
 				break;
 		}
 	}
 
 exit_tag:
-	LOG_INFO(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "End.")
+	LOG_INFO(LOG_CATEGORY_SIGNAL, "End.")
 	return ;
 }
 
