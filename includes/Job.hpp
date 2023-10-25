@@ -81,23 +81,23 @@ class Job
 
 
 
-		const std::string&	getName( void ) const;
-		const std::string&	getCmd( void ) const;
-		uint				getNbProcs( void ) const;
-		uint				getUmask( void ) const;
-		const std::string&	getWorkingdir( void ) const;
-		bool				getAutostart( void ) const;
-		job_policy			getRestartPolicy( void ) const;
-		const char*			getRestartPolicyString( void ) const;
-		const char*			getStatusString( job_status status ) const;
-		uint				getNbRetry( void ) const;
-		const std::vector<uint>		&getExitCodes( void ) const;
-		uint				getStarttime( void ) const;
-		uint				getStoptime( void ) const;
-		int					getStopSignal( void ) const;
-		const std::string&	getStdout( void ) const;
-		const std::string&	getStderr( void ) const;
-		bool				getEnvfromparent( void ) const;
+		const std::string&			getName( void ) const;
+		const std::string&			getCmd( void ) const;
+		uint						getNbProcs( void ) const;
+		uint						getUmask( void ) const;
+		const std::string&			getWorkingdir( void ) const;
+		bool						getAutostart( void ) const;
+		job_policy					getRestartPolicy( void ) const;
+		const char*					getRestartPolicyString( void ) const;
+		const char*					getStatusString( job_status status ) const;
+		uint						getNbRetry( void ) const;
+		const std::vector<uint>&	getExitCodes( void ) const;
+		uint						getStarttime( void ) const;
+		uint						getStoptime( void ) const;
+		int							getStopSignal( void ) const;
+		const std::string&			getStdout( void ) const;
+		const std::string&			getStderr( void ) const;
+		bool						getEnvfromparent( void ) const;
 		const std::map<std::string, std::string>&	getEnv( void ) const;
 
 		const std::map<pid_t, child_status>&		_getpids( void ) const;
@@ -105,7 +105,7 @@ class Job
 
 
 	private:
-		bool				_shouldUpdate;
+		// bool				_shouldUpdate;// TODO use or not for optimization? 
 		job_status			_status;
 		bool				_complete;
 		std::map<pid_t, child_status>	_pid;
@@ -127,8 +127,6 @@ class Job
 		bool				_envfromparent;
 		std::map<std::string, std::string> _env;
 
-
-	friend class Taskmaster;
 };
 
 

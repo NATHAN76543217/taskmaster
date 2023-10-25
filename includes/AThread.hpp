@@ -20,13 +20,13 @@ class AThread
 	protected:
 
 		bool						_running;
-		std::mutex					_internal_mutex;
-		std::mutex					_stop_mutex;
-		std::condition_variable		_ready;
-		std::condition_variable		_stop;
+		std::mutex					_internal_mutex; //to start thread
+		std::mutex					_stop_mutex; //to stop thread
+		std::condition_variable		_ready; //to start thread
+		std::condition_variable		_stop; //to stop thread
 
 		/* unique instance */ 
-		static std::atomic<T*>	instance_;
+		static std::atomic<T*>		instance_;
 
 		AThread( T & super, const std::string & name) : 
 		_thread(&T::operator(), &super),

@@ -4,10 +4,10 @@
 /*
 ** ------------------------------- Static VAR init --------------------------------
 */
-std::condition_variable						Tintin_reporter::_hasUpdate;
-std::mutex									Tintin_reporter::_mutexQueue;
-std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::queue<Tintin_reporter::log_message>();
 
+std::mutex									Tintin_reporter::_mutexQueue;
+std::condition_variable						Tintin_reporter::_hasUpdate;
+std::queue<Tintin_reporter::log_message>	Tintin_reporter::_messageQueue = std::queue<Tintin_reporter::log_message>();
 
 /*
 ** ------------------------------- CONSTRUCTOR --------------------------------
@@ -201,6 +201,7 @@ std::string Tintin_reporter::formatFilename(const std::string & filename) const
 	// }
 }
 
+//TODO check if still needed after LOG_CATEGORY_NAME_MAXSIZE moved to _log
 std::string Tintin_reporter::formatCategoryName(const std::string &categoryName) const
 {
 	std::string formatedName(categoryName);
@@ -402,55 +403,31 @@ void Tintin_reporter::_log(const log_message & message)
 
 	const char* levelPrefix = NULL;
 
-	if (this->_color_enabled)
+	switch (message.level)
 	{
-		switch (message.level)
-		{
-			case LOG_LEVEL_CRITICAL:
-				levelPrefix = LOG_LEVEL_PREFIX_CRITICAL;
-				break;
-			case LOG_LEVEL_ERROR:
-				levelPrefix = LOG_LEVEL_PREFIX_ERROR;
-				break;
-			case LOG_LEVEL_WARNING:
-				levelPrefix = LOG_LEVEL_PREFIX_WARNING;
-				break;
-			case LOG_LEVEL_INFO:
-				levelPrefix = LOG_LEVEL_PREFIX_INFO;
-				break;
-			case LOG_LEVEL_DEBUG:
-			default:
-				levelPrefix = LOG_LEVEL_PREFIX_DEBUG;
-		}
-	}
-	else
-	{
-		switch (message.level)
-		{
-			case LOG_LEVEL_CRITICAL:
-				levelPrefix = LOG_LEVEL_PREFIX_CRITICAL_NOCOLOR;
-				break;
-			case LOG_LEVEL_ERROR:
-				levelPrefix = LOG_LEVEL_PREFIX_ERROR_NOCOLOR;
-				break;
-			case LOG_LEVEL_WARNING:
-				levelPrefix = LOG_LEVEL_PREFIX_WARNING_NOCOLOR;
-				break;
-			case LOG_LEVEL_INFO:
-				levelPrefix = LOG_LEVEL_PREFIX_INFO_NOCOLOR;
-				break;
-			case LOG_LEVEL_DEBUG:
-			default:
-				levelPrefix = LOG_LEVEL_PREFIX_DEBUG_NOCOLOR;
-		}
+		case LOG_LEVEL_CRITICAL:
+			levelPrefix = this->_color_enabled ? LOG_LEVEL_PREFIX_CRITICAL : LOG_LEVEL_PREFIX_CRITICAL_RAW;
+			break;
+		case LOG_LEVEL_ERROR:
+			levelPrefix = this->_color_enabled ? LOG_LEVEL_PREFIX_ERROR : LOG_LEVEL_PREFIX_ERROR_RAW;
+			break;
+		case LOG_LEVEL_WARNING:
+			levelPrefix = this->_color_enabled ? LOG_LEVEL_PREFIX_WARNING : LOG_LEVEL_PREFIX_WARNING_RAW;
+			break;
+		case LOG_LEVEL_INFO:
+			levelPrefix = this->_color_enabled ? LOG_LEVEL_PREFIX_INFO : LOG_LEVEL_PREFIX_INFO_RAW;
+			break;
+		case LOG_LEVEL_DEBUG:
+		default:
+			levelPrefix = this->_color_enabled ? LOG_LEVEL_PREFIX_DEBUG : LOG_LEVEL_PREFIX_DEBUG_RAW;
 	}
 	
 	this->_opened_files.at(this->_categories.at(active_category).filename).output 
-		<< this->getTimestampStr(message.timestamp) << " " 
-		<< this->_categories.at(active_category).name 
-		<< std::setw(16) << this->_threadnames[message.thread]
-		<< levelPrefix
-		<< message.message
+		<< this->getTimestampStr(message.timestamp) << "  " 
+		<< std::setw(LOG_CATEGORY_NAME_MAXSIZE) << this->_categories.at(active_category).name << "  "
+		<< std::setw(LOG_THREAD_NAME_MAXSIZE) << ( "[" + this->_threadnames[message.thread] + "]")
+		<< " " << levelPrefix
+		<< " - " << message.message
 		<< RESET_ANSI << std::endl;
 	return ;
 }
@@ -461,7 +438,11 @@ void Tintin_reporter::_log(const log_message & message)
 
 void Tintin_reporter::setColor(bool enabled)
 {
-	this->_color_enabled = enabled;
+	{
+		std::lock_guard<std::mutex>(this->_internal_mutex);
+		this->_color_enabled = enabled;
+	}
+	return ;
 }
 
 /*
@@ -506,7 +487,10 @@ const std::string &Tintin_reporter::getDefaultCategory(void) const
 
 bool Tintin_reporter::getColor(void) const
 {
-	return this->_color_enabled;
+	{
+		std::lock_guard<std::mutex>(this->_internal_mutex);
+		return this->_color_enabled;
+	}
 }
 
 
@@ -517,7 +501,10 @@ const std::string & Tintin_reporter::getLogdir( void ) const
 
 void				Tintin_reporter::setLogdir( const std::string & path )
 {
-	this->_logDirectory = path;
+	{
+		std::lock_guard<std::mutex>(this->_internal_mutex);
+		this->_logDirectory = path;
+	}	
 }
 
 

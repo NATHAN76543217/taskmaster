@@ -6,6 +6,8 @@
 
 Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 {
+
+	/* Block Signals before starting the SignalCatcher */
 	sigset_t set;
 	sigfillset(&set);
 	if (pthread_sigmask(SIG_SETMASK, &set, NULL))
@@ -338,6 +340,10 @@ int			Taskmaster::_parseConfigServer( void )
 
 
 
+bool				Taskmaster::getLogColor( void ) const
+{
+	return this->_logcolor;
+}
 
 
 const char**		Taskmaster::getEnv( void ) const

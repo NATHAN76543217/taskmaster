@@ -1,12 +1,14 @@
 #include "SignalCatcher.hpp"
 
+/* TODO implement SIGINFO to log infos about current state of the system */
+
 void fake_sigchld_handler(int signo) {
 	std::cout << "SIGCHLD : " << signo << std::endl;
 }
 
 void			SignalCatcher::operator()()
 {
-	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_SIGNALCATCHER << "Wait to start")
+	LOG_INFO(LOG_CATEGORY_THREAD, "Wait to start")
 	{
 		std::unique_lock<std::mutex> lock(this->_internal_mutex);
 		this->_ready.wait(lock);
@@ -16,8 +18,8 @@ void			SignalCatcher::operator()()
 	int		process_status = 0;
 	pid_t	child_pid = 0;
 
-	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_SIGNALCATCHER << "Thread start")
-	LOG_INFO(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "Start")
+	LOG_INFO(LOG_CATEGORY_THREAD, "Start")
+	LOG_INFO(LOG_CATEGORY_SIGNAL, "Start")
 
 	sigemptyset(&(this->_sigSet));
 	sigaddset(&(this->_sigSet), SIGINT);
@@ -30,11 +32,11 @@ void			SignalCatcher::operator()()
 
 	while(this->_running)
 	{
-		LOG_DEBUG(LOG_CATEGORY_SIGNAL, " - Wait a signal - ")
+		LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Wait a signal")
 
 		if (sigwait(&(this->_sigSet), &sigReceived) != 0)
 		{
-			LOG_CRITICAL(LOG_CATEGORY_SIGNAL, THREADTAG_SIGNALCATCHER << "Failed to `sigwait` : Invalid signal number.")
+			LOG_CRITICAL(LOG_CATEGORY_SIGNAL, "Failed to `sigwait` : Invalid signal number.")
 			break ;
 		}
 
@@ -48,7 +50,7 @@ void			SignalCatcher::operator()()
 				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGINT - Stop Taskmaster.")
 				/* Also Stop SignalCatcher Thread */
 				Taskmaster::GetInstance().stop();
-				// this->stop();
+				// this->stop();//REVIEW
 				goto exit_tag;
 				break ;
 			case SIGHUP:
@@ -57,13 +59,12 @@ void			SignalCatcher::operator()()
 
 				break;
 			case SIGCHLD:
-				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGCHLD - A child statuschanged..")
 				if ((child_pid = waitpid(0, &process_status, 0)) == -1) // TODO WNOHANG
 				{
 					LOG_ERROR(LOG_CATEGORY_JM, THREADTAG_SIGNALCATCHER << "Failed to `waitpid` : " << strerror(errno))
 					break ;
 				}
-				LOG_INFO(LOG_CATEGORY_JM, "Notify child [] changed his status.")
+				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGCHLD - Child [" << child_pid << "] status changed.")
 				JobManager::GetInstance().notifyChildDeath(child_pid, process_status);
 
 			break;

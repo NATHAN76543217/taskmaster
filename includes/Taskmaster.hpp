@@ -85,7 +85,7 @@ class Taskmaster : public virtual AThread<Taskmaster>
 		/* Getters and Setters */		
 		const std::string & getLogdir( void ) const;
 		void				setLogdir( const std::string & path );
-
+		bool				getLogColor( void ) const;
 		const char**		getEnv( void ) const;
 		void				setEnv( const char **env);
 
