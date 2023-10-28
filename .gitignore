@@ -12,6 +12,8 @@ config_test.yaml
 THREAD_NAME
 *.gitignore
 tmp*
+diff*
+
 # Prerequisites
 *.d
 

@@ -33,6 +33,8 @@ Tintin_reporter::Tintin_reporter(const std::string &defaultFile) :
 
 Tintin_reporter::~Tintin_reporter()
 {
+	std::unique_lock<std::mutex> lock(Tintin_reporter::static_mutex);
+
 	for (std::map<std::string, Tintin_reporter::log_destination>::iterator it = this->_opened_files.begin();
 		 it != this->_opened_files.end();
 		 it++)
@@ -63,9 +65,10 @@ Tintin_reporter::~Tintin_reporter()
 
 void				Tintin_reporter::operator()( void )
 {
+	std::this_thread::sleep_for(std::chrono::microseconds(10000));
 	LOG_INFO(LOG_CATEGORY_THREAD, "Logger wait to start");
 	{
-		std::unique_lock<std::mutex> lock(this->_internal_mutex);
+		std::unique_lock<std::mutex> lock(Tintin_reporter::static_mutex);
 		this->_ready.wait(lock);
 	}
 
@@ -77,7 +80,7 @@ void				Tintin_reporter::operator()( void )
 	LOG_DEBUG(LOG_CATEGORY_LOGGER, "Logger thread mutex taken.");
 	do {
 		{
-			std::lock_guard<std::mutex> intern_lock(this->_internal_mutex);
+			std::lock_guard<std::mutex> intern_lock(Tintin_reporter::static_mutex);
 			{
 				std::lock_guard<std::mutex> queue_lock(Tintin_reporter::_mutexQueue);
 
@@ -128,7 +131,7 @@ std::ostream &operator<<(std::ostream &o, Tintin_reporter const &i)
 */
 
 
-void				Tintin_reporter::stop( void )
+void				Tintin_reporter::stop( void ) 
 {
 	AThread<Tintin_reporter>::stop();
 	Tintin_reporter::_hasUpdate.notify_all();
@@ -175,7 +178,6 @@ std::string Tintin_reporter::formatFilename(const std::string & filename) const
 	std::string new_filename = filename;
 	if (filename.at(0) != '/')
 	{
-
 		new_filename = this->getLogdir() + filename;
 	}
 
@@ -201,6 +203,7 @@ std::string Tintin_reporter::formatFilename(const std::string & filename) const
 	// }
 }
 
+
 //TODO check if still needed after LOG_CATEGORY_NAME_MAXSIZE moved to _log
 std::string Tintin_reporter::formatCategoryName(const std::string &categoryName) const
 {
@@ -218,6 +221,7 @@ std::string Tintin_reporter::formatCategoryName(const std::string &categoryName)
 /* 
 	Don't detach a previous attachment for now 
 	Use category with standardized path/filename
+	Thread: mono / need internal access
 */
 void Tintin_reporter::attachCategoryToDestination(Tintin_reporter::log_category & category, const std::string & filename)
 {
@@ -240,10 +244,12 @@ void Tintin_reporter::attachCategoryToDestination(Tintin_reporter::log_category 
 	{
 		dest_iterator = this->_opened_files.insert(std::make_pair(filename, newLogDestination())).first;
 		std::ofstream &destination_ofstream = static_cast<std::ofstream &>(dest_iterator->second.output);
+		/* TODO directory creation */
 		/* File creation here */
-		destination_ofstream.open(category.filename, std::ofstream::app);
+		destination_ofstream.open(filename, std::ofstream::out | std::ofstream::app);
 		if (destination_ofstream.fail())
 		{
+			// std::cerr << "dest ofstream failed: |" <<  category.filename << "|" << category.name  << "|" << this->_defaultCategoryName << std::endl;
 			// LOG_ERROR(LOG_CATEGORY_LOGGER, "Failed to open file '" + category.filename + "'.")
 			// LOG_WARN(LOG_CATEGORY_LOGGER, "Set Category '" + CategoryName + "' equal to '" + this->_categories.at(this->_defaultCategoryName).filename + "'.")
 			this->_opened_files.erase(category.filename);
@@ -273,8 +279,15 @@ void Tintin_reporter::detachCategoryFromDestination(const Tintin_reporter::log_c
 	}
 }
 
+
+/*
+
+*/
 int Tintin_reporter::addCategory(const std::string &CategoryName, const std::string &outfile)
 {
+	{
+	std::lock_guard<std::mutex> lock(Tintin_reporter::static_mutex);
+
 	/* Check if category already exist */
 	std::map<std::string, Tintin_reporter::log_category>::iterator cat_it = this->_categories.find(CategoryName);
 	if (cat_it != this->_categories.end())
@@ -292,6 +305,7 @@ int Tintin_reporter::addCategory(const std::string &CategoryName, const std::str
 	}
 
 	// attachCategoryToDestination(*new_category, formatFilename(outfile));
+	}
 
 	LOG_DEBUG(LOG_CATEGORY_LOGGER, "New category added '" + formatCategoryName(CategoryName) + "' pointing to '" + formatFilename(outfile) + "'.")
 	return EXIT_SUCCESS;
@@ -439,7 +453,7 @@ void Tintin_reporter::_log(const log_message & message)
 void Tintin_reporter::setColor(bool enabled)
 {
 	{
-		std::lock_guard<std::mutex>(this->_internal_mutex);
+		std::lock_guard<std::mutex> lock(Tintin_reporter::static_mutex);
 		this->_color_enabled = enabled;
 	}
 	return ;
@@ -488,7 +502,7 @@ const std::string &Tintin_reporter::getDefaultCategory(void) const
 bool Tintin_reporter::getColor(void) const
 {
 	{
-		std::lock_guard<std::mutex>(this->_internal_mutex);
+		std::lock_guard<std::mutex>(const_cast<std::mutex&>(Tintin_reporter::static_mutex));
 		return this->_color_enabled;
 	}
 }
@@ -502,7 +516,7 @@ const std::string & Tintin_reporter::getLogdir( void ) const
 void				Tintin_reporter::setLogdir( const std::string & path )
 {
 	{
-		std::lock_guard<std::mutex>(this->_internal_mutex);
+		std::lock_guard<std::mutex> lock(Tintin_reporter::static_mutex);
 		this->_logDirectory = path;
 	}	
 }

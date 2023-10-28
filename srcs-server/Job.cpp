@@ -175,7 +175,7 @@ std::ostream &			operator<<( std::ostream & o, Job const & i )
 	o << " - pid : " << std::endl;
 	for (std::map<pid_t, child_status>::const_iterator it = i._getpids().begin() ; it != i._getpids().end() ; it++)
 	{
-		o << "   - (" << it->first << ")(" << i.getStatusString(it->second) << ")"<< std::endl;
+		o << "   - (" << it->first << ")(" << i.getChildStatusString(it->second) << ")"<< std::endl;
 	}
 	o << " - umask : " << i.getUmask() << std::endl;
 	o << " - workingdir : " << i.getWorkingdir() << std::endl;
@@ -285,7 +285,7 @@ int				Job::spawnProcess( void )
 	else
 	{
 		//Parent
-		this->_pid.insert(std::make_pair(pid, starting));
+		this->_pid.insert(std::make_pair(pid, child_starting));
 		LOG_INFO(LOG_CATEGORY_JOB, "[" << this->_name << "] Process '" << pid << "' started.")
 	}
 	return EXIT_SUCCESS;
@@ -311,67 +311,84 @@ int				Job::kill( void )
 
 	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
+		if (it->second != child_running)
+			continue;
 		ret = ::kill(it->first, SIGKILL);
 		if ( ret )
 		{
 			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to kill subprocess [" << it->first << "] : " << strerror(errno))
 		}
+		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << it->first << "] killed successfuly")
 	}
 	return (error);
 }
 
 int				Job::stop( void )
 {
-	bool error = false;
-	int ret = 0;
+	int		ret = 0;
+	bool	error = false;
+
 	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
+		if (it->second != child_running)
+			continue;
 		ret = ::kill(it->first, SIGSTOP);
 		if ( ret )
 		{
 			error = true;
 			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to stop subprocess [" << it->first << "] : " << strerror(errno))
 		}
+		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << it->first << "] stopped successfuly")
 	}
 	return (error);
 }
 
 int				Job::terminate( void )
 {
-	bool error = false;
-	int ret = 0;
+	int		ret = 0;
+	bool	error = false;
+
 	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
+		if (it->second != child_running)
+			continue;
 		ret = ::kill(it->first, SIGTERM);
 		if ( ret )
 		{
 			error = true;
 			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to terminate subprocess [" << it->first << "] : " << strerror(errno))
 		}
+		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << it->first << "] terminated successfuly")
 	}
 	return (error);
 }
 
 int				Job::suspend( void )
 {
-	bool error = false;
-	int ret = 0;
+	int		ret = 0;
+	bool	error = false;
+
 	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
+		if (it->second != child_running)
+			continue;
 		ret = ::kill(it->first, SIGTSTP);
 		if ( ret )
 		{
 			error = true;
 			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to suspend subprocess [" << it->first << "] : " << strerror(errno))
 		}
+		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << it->first << "] suspended successfuly")
 	}
 	return (error);
 }
 
+//REVIEW resume only stopped childs
 int				Job::resume( void )
 {
-	bool error = false;
-	int ret = 0;
+	int		ret = 0;
+	bool	error = false;
+
 	for (std::map<pid_t, child_status>::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
 	{
 		ret = ::kill(it->first, SIGCONT);
@@ -380,6 +397,7 @@ int				Job::resume( void )
 			error = true;
 			LOG_ERROR(LOG_CATEGORY_JOB, "Failed to wake subprocess [" << it->first << "] : " << strerror(errno))
 		}
+		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << it->first << "] resumed successfuly")
 	}
 	return (error);
 }
@@ -419,6 +437,7 @@ int				Job::gracefullStop( void )
 	if (this->terminate() != EXIT_SUCCESS)
 		return this->kill();
 	std::this_thread::sleep_for(std::chrono::seconds(this->_stoptime));
+	//REVIEW here to avoid waiting a long time a process alredy successfuly stopped
 	int stat = 0;
 	int ret = 0;
 	for (std::map<pid_t, child_status >::iterator it = this->_pid.begin(); it != this->_pid.end(); it++)
@@ -691,6 +710,41 @@ const char*				Job::getStatusString( job_status status ) const
 			return "exited";
 			break;
 		case terminated:
+			return "terminated";
+			break;
+		default:
+			LOG_CRITICAL(LOG_CATEGORY_JOB, "Invalid status value '" + ntos(this->_restartpolicy) + "' for job '" + this->_name + "'.") 
+//TODO remove all ntos() call in all the code
+	}
+	return "unknown";
+}
+
+const char*				Job::getChildStatusString( child_status status ) const
+{
+	switch (status)
+	{	
+		case child_not_started:
+			return "not started";
+			break;
+		case child_starting:
+			return "starting";
+			break;
+		case child_running:
+			return "running";
+			break;
+		case child_stopped:
+			return "stopped";
+			break;
+		case child_suspended:
+			return "suspended";
+			break;
+		case child_terminating:
+			return "terminating";
+			break;
+		case child_exited:
+			return "exited";
+			break;
+		case child_terminated:
 			return "terminated";
 			break;
 		default:

@@ -24,30 +24,31 @@ enum job_policy {
 };
 
 enum job_status {
-	not_started,	//init value
-	starting,		//on start
-	running,		//very job if successfuly started
-	stopped,		//process stoped by a SIGSTOP
-	suspended,		//process stopped by a SIGTSTP
-	incomplete,		//p
-	exited,			//process terminate with a bad exit value
-	killed,			//process terminate by a signal
-	terminated		//process terminate with success
+	not_started,	//0 All processes are not started yet
+	starting,		//1 All processes should start
+	running,		//2 All processes are running
+	stopped,		//3 All processes stoped by a SIGSTOP
+	suspended,		//4 All processes stopped by a SIGTSTP
+	incomplete,		//5 All processes should be running but at least one is not
+	exited,			//6 All processes terminated and at least one with a bad exit value
+	terminated,		//7 All processes of job terminated with success
+	killed			//8 All processes terminated and at least one by a signal
 };
 
-typedef enum job_status child_status;
+//TODO create a class/struct with a child_status and a timestamp since the last status changes
+enum child_status {
+	child_not_started,	// The process is not started yet
+	child_starting,			// The process is starting
+	child_running,		// The process is running
+	child_stopped,		// The process is stopped by a SIGSTOP
+	child_suspended,	// The process is stopped by a SIGTSTP
+	child_terminating,	// To have the same number of values than job_status
+	child_exited,		// The process terminate with a bad exit value
+	child_terminated,	// The process terminate with a success exit value
+	child_killed		// The process is terminated by a signal
+};
 
-// enum child_status {
-// 	not_started,
-// 	starting,
-// 	running,
-// 	stopped,
-// 	suspended,
-// 	exited,
-// 	terminated
-// };
-
-# define TM_DEF_CONFIGPATH	"./config_test.yaml"
+# define TM_DEF_CONFIGPATH	"/Users/sebastienlecaille/programmation/101/mygithub/taskmaster/config_test.yaml"
 // # define TM_DEF_CONFIGPATH "./config_template.yaml"
 # define TM_DEF_LOCKPATH	"/var/lock/matt_daemon.lock"
 
@@ -149,7 +150,7 @@ typedef enum job_status child_status;
 # define LOG_CATEGORY_NAME_MAXSIZE	7
 # define LOG_THREAD_NAME_MAXSIZE	16
 
-# define LOG_STDOUT_MAGIC 		"STDOUT"
+# define LOG_STDOUT_MAGIC 		"STDOUT" // "filename" for STD's
 # define LOG_STDERR_MAGIC 		"STDERR"
 
 # define LOG_CATEGORY_DEFAULT	"DEFAULT"
@@ -162,7 +163,7 @@ typedef enum job_status child_status;
 # define LOG_CATEGORY_JM		"JOBMNGR"
 # define LOG_CATEGORY_THREAD	"THREAD"
 # define LOG_CATEGORY_LOGGER	"LOGGER"
-# define LOG_CATEGORY_STDOUT	LOG_STDOUT_MAGIC
+# define LOG_CATEGORY_STDOUT	LOG_STDOUT_MAGIC// category name for STD's
 # define LOG_CATEGORY_STDERR	LOG_STDERR_MAGIC
 
 

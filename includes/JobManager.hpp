@@ -40,13 +40,8 @@ class JobManager : public virtual  AThread<JobManager>
 
 	public:
 
-	static JobManager&	GetInstance( const std::string & name = "JobManager" )
-	{
-		return AThread<JobManager>::GetInstance(name);
-	}
-
-	/* Logic loop for execution */
-	void	operator()();
+		/* Logic loop for execution */
+		void	operator()( void );
 
 	/* JobManager methods */
 	

@@ -113,7 +113,6 @@ int main(int ac, char** av, const char** env)
 
 	Taskmaster &TM = Taskmaster::CreateInstance("Taskmaster");
 
-
 	if (TM.initialization(env) == EXIT_FAILURE)
 	{
 		LOG_ERROR(LOG_CATEGORY_INIT, "Initialization failed.")
@@ -122,22 +121,18 @@ int main(int ac, char** av, const char** env)
 	}
 
 	// Display all jobs
-	// std::cout << "=== JOBS ===" << std::endl;
-	// for (std::list<Job>::const_iterator it = TM->_joblist.begin(); it != TM->_joblist.end(); it++)
-	// {
-	// 	LOG_DEBUG(LOG_CATEGORY_JOB, *it);
-	// }
 	LOG_INFO(LOG_CATEGORY_MAIN, "Start all threads.");
-
+	std::this_thread::sleep_for(std::chrono::microseconds(10000)); //Review utility
 	TM.startAll();
-
 	LOG_INFO(LOG_CATEGORY_MAIN, "Main suspended until taskmaster's end.")
 	TM.waitEnd();
 	LOG_INFO(LOG_CATEGORY_MAIN, "Main resumed.")
 
 	LOG_DEBUG(LOG_CATEGORY_MAIN, "Destroying Taskmaster's instance.")
 
-	/* NO LOGGER USE BELLOW THIS LINE */
+	/* 
+	** NO LOGGER USE BELLOW THIS LINE
+	*/
 
 	Taskmaster::Destroy();
 
@@ -176,6 +171,6 @@ int main(int ac, char** av, const char** env)
 // 	// also print on stdout (maybe ?)
 // 	LOG_INFO(LOG_CATEGORY_INIT, "Started daemon (" << pid << ")")
 // 	LOG_INFO(LOG_CATEGORY_INIT, "Destroying logger.")
-//TODO should not close logger in main 
+//	TODO should not close logger in main 
 // 	Tintin_reporter::destroyLogManager();
 // 	return (EXIT_SUCCESS);

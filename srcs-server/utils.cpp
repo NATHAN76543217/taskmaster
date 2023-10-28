@@ -20,7 +20,7 @@ int			takeLockFile( const std::string & path )
 		}
 		return EXIT_FAILURE;
 	}
-	std::cerr << "Lock file '" << path << "' successfuly taken." << std::endl;
+	std::cout << "Lock file '" << path << "' successfuly taken." << std::endl;
 	close(fd);
 	return EXIT_SUCCESS;
 }

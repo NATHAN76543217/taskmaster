@@ -15,23 +15,24 @@ Taskmaster&		Taskmaster::CreateInstance( const std::string & name )
 		std::cout << "Failed to `pthread_sigmask` : " << strerror(errno) ;
 	}
 
-	SignalCatcher::GetInstance();
+	SignalCatcher::GetInstance("SignalCatcher");
+
 	Taskmaster & TM = Taskmaster::GetInstance(name);
+
 	if (TM.loadConfigFile(TM_DEF_CONFIGPATH))
 	{
 		LOG_CRITICAL(LOG_CATEGORY_INIT, "Failed to load configuration file. Aborting")
 		return TM;
 	}
-
 	Tintin_reporter& logger = Tintin_reporter::CreateInstance(TM.getLogdir(), "default.log");
+	logger.setColor(TM.getLogColor());
 #if LOG_CATEGORY_AUTO == false
 	TM.initCategories();
-	std::cout << logger << std::endl;
-	LOG_INFO(LOG_CATEGORY_LOGGER, Tintin_reporter::GetInstance())
+	LOG_INFO(LOG_CATEGORY_LOGGER, logger)
 # else
 	Tintin_reporter::GetInstance("./default.log");
 #endif
-	JobManager::GetInstance();
+	JobManager::GetInstance("JobManager");
 	return TM;
 }
 
@@ -50,10 +51,16 @@ void			Taskmaster::Destroy( void )
 int			Taskmaster::initialization( const char** env )
 {
 	LOG_INFO(LOG_CATEGORY_INIT, "Wait to initialize taskmaster")
-	std::lock_guard<std::mutex> lock(this->_internal_mutex);
-	LOG_INFO(LOG_CATEGORY_INIT, "Initialization start.")
-
-	this->setEnv(env);
+	try
+	{
+		std::lock_guard<std::mutex> lock(Taskmaster::static_mutex);
+		LOG_INFO(LOG_CATEGORY_INIT, "Initialization start.")
+		this->setEnv(env);
+	}
+	catch (std::system_error & e )
+	{
+		std::cerr << "catch sys error init taskmaster" << std::endl;
+	}
 
 	LOG_INFO(LOG_CATEGORY_INIT, "PID: " << ::getpid())
 
@@ -72,6 +79,9 @@ int			Taskmaster::initialization( const char** env )
 
 
 //TODO rename in init logger
+/*
+	Tintin_reporter must be already init
+*/
 void		Taskmaster::initCategories( void ) const
 {
 	// Tintin_reporter::getLogManager(LOG_STDOUT_MAGIC).addCategory(LOG_CATEGORY_DEFAULT);
@@ -322,10 +332,7 @@ int			Taskmaster::_parseConfigServer( void )
 
 
 	if (this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR])
-	{
 		this->_logcolor = this->_config[TM_FIELD_SERVER][TM_FIELD_LOGCOLOR].as<bool>();
-		Tintin_reporter::GetInstance().setColor(this->_logcolor);
-	}
 	else
 		this->_logcolor = TM_DEF_LOGCOLOR;
 
@@ -379,7 +386,7 @@ const std::string&		Taskmaster::getWorkingdir( void ) const
 
 int			Taskmaster::loadConfigFile(const std::string & path)
 {
-	std::lock_guard<std::mutex> lock(this->_internal_mutex);
+	std::lock_guard<std::mutex> lock(Taskmaster::static_mutex);
 	
 	try {
 
@@ -409,7 +416,7 @@ int			Taskmaster::loadConfigFile(const std::string & path)
 
 int			Taskmaster::reloadConfigFile( void )
 {
-	std::lock_guard<std::mutex> lock(this->_internal_mutex);
+	std::lock_guard<std::mutex> lock(Taskmaster::static_mutex);
 
 	if (this->_config.reloadConfigFile())
 	{
@@ -429,10 +436,16 @@ int			Taskmaster::reloadConfigFile( void )
 
 void		Taskmaster::operator()( void )
 {
+	std::this_thread::sleep_for(std::chrono::microseconds(10000));
 	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_TASKMASTER << " wait to start")
+	try
 	{
-		std::unique_lock<std::mutex> lock(this->_internal_mutex);
+		std::unique_lock<std::mutex> lock(Taskmaster::static_mutex);
 		this->_ready.wait(lock);
+	}
+	catch( std::system_error & e)
+	{
+		std::cerr << "catch tasjmaster loop start" << std::endl; 
 	}
 	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_TASKMASTER << "Thread start")
 	LOG_INFO(LOG_CATEGORY_DEFAULT, THREADTAG_TASKMASTER << "Start")
@@ -441,10 +454,10 @@ void		Taskmaster::operator()( void )
 	{
 		LOG_DEBUG(LOG_CATEGORY_DEFAULT, "TM/Server thread - loop");
 
-		std::this_thread::sleep_for(std::chrono::seconds(2));
+		std::this_thread::sleep_for(std::chrono::seconds(4));
 		
 		{
-			std::lock_guard<std::mutex> lk(this->_internal_mutex);
+			std::lock_guard<std::mutex> lk(Taskmaster::static_mutex);
 			if (!this->_running)
 			{
 				break ;

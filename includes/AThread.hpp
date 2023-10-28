@@ -16,12 +16,11 @@ class AThread
 		std::thread		_thread;
 		std::string		_name;
 
-
+	public:
+		static std::mutex			static_mutex;
 	protected:
-
 		bool						_running;
-		std::mutex					_internal_mutex; //to start thread
-		std::mutex					_stop_mutex; //to stop thread
+		std::mutex					_stop_mutex; //to stop thread REVIEW change to static as start variable or not? 
 		std::condition_variable		_ready; //to start thread
 		std::condition_variable		_stop; //to stop thread
 
@@ -32,7 +31,6 @@ class AThread
 		_thread(&T::operator(), &super),
 		_name(name),
 		_running(true),
-		_internal_mutex(),
 		_stop_mutex(),
 		_ready(),
 		_stop()
@@ -62,14 +60,15 @@ class AThread
 
 		virtual void			operator()( void )
 		{
-			// LOG_CRITICAL(LOG_CATEGORY_THREAD, "AThread - Operator()")
+			std::cerr << "CRITICALL" << std::endl;
+			std::cerr << std::flush;
 		}
 
 
 		virtual	void			start( void )
 		{
 			{
-				std::lock_guard<std::mutex> lock(this->_internal_mutex);
+				std::lock_guard<std::mutex> lock(AThread<T>::static_mutex);
 				this->_running = true;
 			}
 			this->_ready.notify_all();
@@ -84,9 +83,8 @@ class AThread
 
 		virtual	void			stop( void )
 		{
-			std::cerr << "stop - "<< this->_name << std::endl;
 			{
-				std::lock_guard<std::mutex> lock(this->_internal_mutex);
+				std::lock_guard<std::mutex> lock(AThread<T>::static_mutex);
 				this->_running = false;
 			}
 			this->_stop.notify_all();
@@ -108,6 +106,8 @@ class AThread
 	template<typename T>
 		std::atomic<T*>	AThread<T>::instance_{nullptr};
 
+	template<typename T>
+		std::mutex		AThread<T>::static_mutex;
 
 	template<typename T>
 		T&		AThread<T>::GetInstance( const std::string & name )
@@ -127,7 +127,6 @@ class AThread
 			instance_.load()->_thread.join();
 			delete instance_.load();
 			instance_.store(nullptr);
-
 		}
 
 

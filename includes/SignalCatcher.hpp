@@ -29,11 +29,6 @@ class SignalCatcher : public virtual AThread<SignalCatcher>
 	public:
 
 		/* Public methods */
-		static SignalCatcher&	GetInstance( const std::string & name = "SignalCatcher" )
-		{
-			return AThread<SignalCatcher>::GetInstance(name);
-		}
-
 
 	friend class AThread<SignalCatcher>;
 };

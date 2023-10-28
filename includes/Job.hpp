@@ -90,6 +90,7 @@ class Job
 		job_policy					getRestartPolicy( void ) const;
 		const char*					getRestartPolicyString( void ) const;
 		const char*					getStatusString( job_status status ) const;
+		const char*					getChildStatusString( child_status status ) const;
 		uint						getNbRetry( void ) const;
 		const std::vector<uint>&	getExitCodes( void ) const;
 		uint						getStarttime( void ) const;

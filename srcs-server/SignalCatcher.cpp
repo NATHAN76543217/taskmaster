@@ -8,11 +8,11 @@ void fake_sigchld_handler(int signo) {
 
 void			SignalCatcher::operator()()
 {
+	std::this_thread::sleep_for(std::chrono::microseconds(10000));
 	LOG_INFO(LOG_CATEGORY_THREAD, "Wait to start")
 	{
-		std::unique_lock<std::mutex> lock(this->_internal_mutex);
+		std::unique_lock<std::mutex> lock(SignalCatcher::static_mutex);
 		this->_ready.wait(lock);
-		lock.unlock();
 	}
 	int		sigReceived = 0;
 	int		process_status = 0;
@@ -33,7 +33,6 @@ void			SignalCatcher::operator()()
 	while(this->_running)
 	{
 		LOG_DEBUG(LOG_CATEGORY_SIGNAL, "Wait a signal")
-
 		if (sigwait(&(this->_sigSet), &sigReceived) != 0)
 		{
 			LOG_CRITICAL(LOG_CATEGORY_SIGNAL, "Failed to `sigwait` : Invalid signal number.")
@@ -50,7 +49,6 @@ void			SignalCatcher::operator()()
 				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGINT - Stop Taskmaster.")
 				/* Also Stop SignalCatcher Thread */
 				Taskmaster::GetInstance().stop();
-				// this->stop();//REVIEW
 				goto exit_tag;
 				break ;
 			case SIGHUP:
