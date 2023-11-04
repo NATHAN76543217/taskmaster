@@ -8,8 +8,8 @@ void fake_sigchld_handler(int signo) {
 
 void			SignalCatcher::operator()()
 {
-	std::this_thread::sleep_for(std::chrono::microseconds(10000));
-	LOG_INFO(LOG_CATEGORY_THREAD, "Wait to start")
+	std::this_thread::sleep_for(std::chrono::microseconds(100));
+	LOG_INFO(LOG_CATEGORY_SIGNAL, "Wait to start")
 	{
 		std::unique_lock<std::mutex> lock(SignalCatcher::static_mutex);
 		this->_ready.wait(lock);
@@ -18,7 +18,6 @@ void			SignalCatcher::operator()()
 	int		process_status = 0;
 	pid_t	child_pid = 0;
 
-	LOG_INFO(LOG_CATEGORY_THREAD, "Start")
 	LOG_INFO(LOG_CATEGORY_SIGNAL, "Start")
 
 	sigemptyset(&(this->_sigSet));
@@ -57,14 +56,27 @@ void			SignalCatcher::operator()()
 
 				break;
 			case SIGCHLD:
-				if ((child_pid = waitpid(0, &process_status, 0)) == -1) // TODO WNOHANG
+				while ((child_pid = waitpid(0, &process_status, WNOHANG | WUNTRACED )) != 0)
 				{
-					LOG_ERROR(LOG_CATEGORY_JM, THREADTAG_SIGNALCATCHER << "Failed to `waitpid` : " << strerror(errno))
-					break ;
-				}
-				LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGCHLD - Child [" << child_pid << "] status changed.")
-				JobManager::GetInstance().notifyChildDeath(child_pid, process_status);
 
+					// if ( (child_pid = waitpid(0, &process_status, WNOHANG | WUNTRACED )) == -1)
+					if (child_pid == -1)
+					{
+						int err = errno;
+						if (err != ECHILD)
+						{
+							LOG_ERROR(LOG_CATEGORY_SIGNAL, "Failed to `waitpid` : " << strerror(err))
+						}
+						else
+						{
+
+							LOG_DEBUG(LOG_CATEGORY_SIGNAL, "No more child status to collect")
+						}		
+						break ;
+					}
+					LOG_INFO(LOG_CATEGORY_SIGNAL, "SIGCHLD - Child [" << child_pid << "] status changed.")
+					JobManager::GetInstance().notifyChildDeath(child_pid, process_status);
+				}
 			break;
 			default:
 				LOG_ERROR(LOG_CATEGORY_SIGNAL, "Invalid signal number (" << sigReceived << ").")

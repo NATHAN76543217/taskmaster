@@ -96,8 +96,6 @@ void		Taskmaster::initCategories( void ) const
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_CONFIG);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JOB);
 	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_JM);
-	// Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_THREAD, "./thread.log");
-	Tintin_reporter::GetInstance().addCategory(LOG_CATEGORY_THREAD);
 }
 
 
@@ -437,7 +435,7 @@ int			Taskmaster::reloadConfigFile( void )
 void		Taskmaster::operator()( void )
 {
 	std::this_thread::sleep_for(std::chrono::microseconds(10000));
-	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_TASKMASTER << " wait to start")
+	LOG_INFO(LOG_CATEGORY_DEFAULT, " wait to start")
 	try
 	{
 		std::unique_lock<std::mutex> lock(Taskmaster::static_mutex);
@@ -447,8 +445,7 @@ void		Taskmaster::operator()( void )
 	{
 		std::cerr << "catch tasjmaster loop start" << std::endl; 
 	}
-	LOG_INFO(LOG_CATEGORY_THREAD, THREADTAG_TASKMASTER << "Thread start")
-	LOG_INFO(LOG_CATEGORY_DEFAULT, THREADTAG_TASKMASTER << "Start")
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "Start")
 
 	while ( true )
 	{
@@ -464,7 +461,7 @@ void		Taskmaster::operator()( void )
 			}
 		}
 	}
-	LOG_INFO(LOG_CATEGORY_DEFAULT, THREADTAG_TASKMASTER << "End")
+	LOG_INFO(LOG_CATEGORY_DEFAULT, "End")
 	return ;
 }
 

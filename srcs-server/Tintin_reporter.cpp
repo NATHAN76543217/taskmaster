@@ -66,18 +66,16 @@ Tintin_reporter::~Tintin_reporter()
 void				Tintin_reporter::operator()( void )
 {
 	std::this_thread::sleep_for(std::chrono::microseconds(10000));
-	LOG_INFO(LOG_CATEGORY_THREAD, "Logger wait to start");
+	LOG_INFO(LOG_CATEGORY_LOGGER, "wait to start");
 	{
 		std::unique_lock<std::mutex> lock(Tintin_reporter::static_mutex);
 		this->_ready.wait(lock);
 	}
 
-	LOG_INFO(LOG_CATEGORY_THREAD, "Logger thread start.");
-	LOG_INFO(LOG_CATEGORY_LOGGER, "Logger thread start.");
+	LOG_INFO(LOG_CATEGORY_LOGGER, "Start.");
 
 	std::unique_lock<std::mutex> update_lock(this->_mutexUpdate);
 
-	LOG_DEBUG(LOG_CATEGORY_LOGGER, "Logger thread mutex taken.");
 	do {
 		{
 			std::lock_guard<std::mutex> intern_lock(Tintin_reporter::static_mutex);
@@ -93,7 +91,6 @@ void				Tintin_reporter::operator()( void )
 			if (this->_running == false)
 			{
 				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_LOGGER, std::this_thread::get_id(), Tintin_reporter::getTimestamp(), "End."));
-				this->_log(log_message(LOG_LEVEL_INFO, LOG_CATEGORY_THREAD, std::this_thread::get_id(), Tintin_reporter::getTimestamp(), "Thread end."));
 				break;
 			}
 		}

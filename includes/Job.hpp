@@ -4,7 +4,7 @@
 # include <iostream>
 # include <string>
 # include <map>
-// # include <list>
+# include <algorithm>
 # include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -54,6 +54,7 @@ class Job
 		int				kill_pid( pid_t pid );
 		int				gracefullStop( void );
 
+		bool			isSuccessExitCode( uint return_value );
 		void			setChildStatus( pid_t pid, child_status status);
 		job_status		getStatus( void ) const;
 		void			setStatus( job_status status );
@@ -130,6 +131,7 @@ class Job
 
 };
 
+std::ostream &			operator<<( std::ostream & o, Job const & i );
 
 
 #endif /* ************************************************************* JOB_H */

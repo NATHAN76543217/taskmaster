@@ -29,7 +29,7 @@ class JobManager : public virtual  AThread<JobManager>
 			_hasUpdate(),
 			_configChanged(true)
 		{
-			LOG_DEBUG(LOG_CATEGORY_THREAD, "JobCatcher - Constructor")
+			LOG_DEBUG(LOG_CATEGORY_JM, "JobManager - Constructor")
 		};
 
 		~JobManager() {

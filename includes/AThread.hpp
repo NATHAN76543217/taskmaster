@@ -37,14 +37,6 @@ class AThread
 		{
 		}
 
-		// AThread( const std::string & name) : 
-		// _thread(),
-		// _name(name),
-		// _running(true)
-		// {
-		// 	LOG_DEBUG(LOG_CATEGORY_THREAD, "AThread - Constructor <" << this->_name << "> - nothread.")
-		// }
-
 	public:
 
 		static T&		GetInstance( const std::string & name = "THREAD_NAME" );

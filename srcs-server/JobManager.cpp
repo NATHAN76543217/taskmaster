@@ -15,14 +15,14 @@
 
 void			JobManager::operator()()
 {
-	std::this_thread::sleep_for(std::chrono::microseconds(10000));
-	LOG_INFO(LOG_CATEGORY_THREAD, "Wait to start");
+	LOG_INFO(LOG_CATEGORY_JM, "Wait to start");
 	{
 		std::unique_lock<std::mutex> lock_start(JobManager::static_mutex);
 		this->_ready.wait(lock_start);
 	}
-	LOG_INFO(LOG_CATEGORY_THREAD,  "Start")
 	LOG_INFO(LOG_CATEGORY_JM, "Start")
+
+	std::this_thread::sleep_for(std::chrono::microseconds(10000));
 
 	/* Init */
 	bool	tmpCycleUsefull = false;
@@ -57,6 +57,7 @@ void			JobManager::operator()()
 		
 		{
 			/* Check here if jobs differ from their max state */
+			/* Adapt job status according to child status */
 			for (std::list<Job>::iterator job_it = this->_runningjobs.begin(); job_it != this->_runningjobs.end(); job_it++ )
 			{
 				/* TODO remove terminated process with restart policy never or onfailure : if all process of a job are done : set the job as done*/
@@ -70,7 +71,11 @@ void			JobManager::operator()()
 								/* Should start */
 								break;
 							case child_starting:
+								/* REVIEW JOB status stay as starting as long it have a child with status child_starting */
 								/* Check if starting since long enough */
+									// jobFinalStatus = starting;
+									jobFinalStatus = incomplete;
+								break;
 							case child_terminated:
 								if (jobFinalStatus == not_started || jobFinalStatus == terminated)
 									jobFinalStatus = terminated;
@@ -78,6 +83,7 @@ void			JobManager::operator()()
 							case child_exited:
 								if (jobFinalStatus != killed)
 									jobFinalStatus = exited;
+								break;
 							case child_killed:
 								jobFinalStatus = killed;
 								/* Restart according to policy */
@@ -94,8 +100,12 @@ void			JobManager::operator()()
 								LOG_CRITICAL(LOG_CATEGORY_JOB, "We are supposed to handle every kind of child status")
 						}
 					}
-					job_it->setStatus(jobFinalStatus);
-					LOG_INFO(LOG_CATEGORY_JOB, job_it->getName() << " status set to : " << jobFinalStatus)
+					if (job_it->getStatus() != jobFinalStatus)
+					{
+						job_it->setStatus(jobFinalStatus);
+						LOG_INFO(LOG_CATEGORY_JOB, job_it->getName() << " status set to : " << job_it->getStatusString(jobFinalStatus))
+						tmpCycleUsefull = true;
+					}
 			}
 			
 		}
@@ -107,7 +117,6 @@ void			JobManager::operator()()
 	}
 	while (this->_running);
 	LOG_INFO(LOG_CATEGORY_JM, "End.")
-	LOG_INFO(LOG_CATEGORY_THREAD, "End.")
 }
 
 
@@ -115,8 +124,6 @@ void			JobManager::operator()()
 int			JobManager::_updateConfig( void )
 {
 	std::list<Job> 	tmp;
-	//TODO remove debug
-	std::cout << std::endl << "JobSize before config check = " << this->_runningjobs.size() << std::endl;
 	Taskmaster& TM = Taskmaster::GetInstance();
 
 
@@ -190,14 +197,10 @@ int			JobManager::_updateConfig( void )
 ** --------------------------------- METHODS ----------------------------------
 */
 
-// int			JobManager::startThreadJM( void )
-// {
-// 	// this->_threadJM(std::ref(*this));
-// 	this->_threadJM = std::thread(std::ref(*this));
-
-// 	return EXIT_SUCCESS;
-// }
-
+/*
+	Return an iterator to the job holding the process `pid`
+	Otherwise return this->getJobEnd()
+*/
 std::list<Job>::iterator		JobManager::getJobByPid(pid_t pid)
 {
 	std::list<Job>::iterator it = this->_runningjobs.begin();
@@ -221,26 +224,23 @@ void		JobManager::notifyChildDeath( pid_t pid, int stat)
 {
 	{
 		std::lock_guard<std::mutex> lock(JobManager::static_mutex);
-		std::list<Job>::iterator it = this->getJobByPid(pid);
-		if (it == this->getJobEnd())
+		std::list<Job>::iterator job_it = this->getJobByPid(pid);
+
+		if (job_it == this->getJobEnd())
 		{
-			//not found
-			LOG_CRITICAL(LOG_CATEGORY_JM, "Notify the death of a pid not found in JobManager")
+			LOG_CRITICAL(LOG_CATEGORY_JM, "Notify the death of a pid not existing in JobManager")
 			return ;
 		}
+
 		if (WIFEXITED(stat))
 		{
 			uint return_value = WEXITSTATUS(stat);
+			
 			// TODO implement here multiple success values
-			if (return_value == 0)
-			{
-				it->setChildStatus(pid, child_terminated);
-			}
+			if (job_it->isSuccessExitCode(return_value))
+				job_it->setChildStatus(pid, child_terminated);
 			else
-			{
-				it->setChildStatus(pid, child_exited);
-				// it->rmPid(pid);
-			}
+				job_it->setChildStatus(pid, child_exited);
 			LOG_INFO(LOG_CATEGORY_JOB, "Child [" << pid << "] exited with code: " << return_value << ".")
 		}
 		else if (WIFSIGNALED(stat))
@@ -252,23 +252,23 @@ void		JobManager::notifyChildDeath( pid_t pid, int stat)
 				case SIGINT:
 				break;
 				default:
-					it->setChildStatus(pid, child_killed);
+					job_it->setChildStatus(pid, child_killed);
 			}
-			it->setStatus(incomplete);
-			it->rmPid(pid);
+			job_it->setStatus(incomplete);
+			job_it->rmPid(pid);
 		}
 		else if (WIFSTOPPED(stat))
 		{
 			switch (WSTOPSIG(stat))
 			{
 				case SIGTSTP:
-					it->setChildStatus(pid, child_suspended);
+					job_it->setChildStatus(pid, child_suspended);
 				break;
 				case SIGSTOP:
-					it->setChildStatus(pid, child_stopped);
+					job_it->setChildStatus(pid, child_stopped);
 				break;
 				default:
-					it->setChildStatus(pid, child_stopped);
+					job_it->setChildStatus(pid, child_stopped);
 					LOG_CRITICAL(LOG_CATEGORY_JM, "Unknown stop signal " << WSTOPSIG(stat) << ".")
 			}
 		}
@@ -293,6 +293,7 @@ void			JobManager::stop( void )
 	for (std::list<Job>::iterator it = this->_runningjobs.begin(); it != this->_runningjobs.end(); it++)
 	{
 		LOG_INFO(LOG_CATEGORY_JM, "Gracefuly stopping job `" << it->getName() << "`.")
+		LOG_DEBUG(LOG_CATEGORY_JM, (*it))
 		it->gracefullStop();
 	}
 	LOG_INFO(LOG_CATEGORY_JM, "All jobs stopped.")

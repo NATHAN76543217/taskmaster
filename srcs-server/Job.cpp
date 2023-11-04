@@ -90,7 +90,7 @@ _workingdir(TM_DEF_WORKDIR),
 _autostart(TM_DEF_AUTOSTART),
 _restartpolicy(TM_DEF_RESTARTPOLICY),
 _nbretrymax(TM_DEF_NBRETRYMAX),
-_exitcode(),
+_exitcode(1, TM_DEF_EXITCODE),
 _starttime(TM_DEF_STARTTIME),
 _stoptime(TM_DEF_STOPTIME),
 _stopsignal(TM_DEF_STOPSIGNAL),
@@ -98,8 +98,7 @@ _stdout(TM_DEF_STDOUT),
 _stderr(TM_DEF_STDERR),
 _envfromparent(TM_DEF_ENVFROMPARENT),
 _env()
-{
-}
+{}
 
 Job::Job( const Job & src ) : 
 _status(src._status),
@@ -224,18 +223,25 @@ int				Job::spawnProcess( void )
 	{
 		/* child process */
 
+		/* NO USE OF LOGGER IN CHILD */
+
 		/* Set umask */
-		LOG_DEBUG(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] umask: " << umask(this->getUmask()) << " -> " << this->getUmask()) 
+		std::cout << "[" << this->_name << "][" << getpid() << "] umask: " << umask(this->getUmask()) << " -> " << this->getUmask() << std::endl; 
 	
 		/* Set cwd */
 		if (this->_workingdir.empty())
-			LOG_CRITICAL(LOG_CATEGORY_JOB, "Job's pwd shouldn't be empty.")
+			std::cout << "job pwd shouldn't be empty" << std::endl;
 		else
 		{
 			if (chdir(this->getWorkingdir().c_str()) == -1)
-				LOG_ERROR(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Failed to change working direcotry : " << strerror(errno))
+			{
+				//TODO to report this kind of error, use exit(code) where code is an integer greater than 256 to differenciate it from a successfull run that return a positive value
+				std::cout << "[" << this->_name << "][" << getpid() << "] Failed to change working direcotry : " << strerror(errno) << std::endl;
+			}
 			else
-				LOG_DEBUG(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Set `workingdir` to `" << this->_workingdir << "`.")
+			{
+				std::cout << "[" << this->_name << "][" << getpid() << "] Set `workingdir` to `" << this->_workingdir << "`." << std::endl;
+			}
 		}
 
 		/* Set environnement */
@@ -278,7 +284,7 @@ int				Job::spawnProcess( void )
 		/* Launch command */
 		if (execve(arg_array[0], arg_array.data() ,env_array.data()) == -1)
 		{
-			LOG_ERROR(LOG_CATEGORY_JOB, "[" << this->_name << "][" << getpid() << "] Failed to `execve` : " << strerror(errno))
+			std::cout <<  "[" << this->_name << "][" << getpid() << "] Failed to `execve` : " << strerror(errno) << std::endl;
 		}
 		exit(EXIT_FAILURE);
 	}
@@ -461,13 +467,6 @@ int				Job::gracefullStop( void )
 	return EXIT_SUCCESS;
 }
 
-// int			Job::refreshStatus()
-// {
-
-// }
-
-//TODO set default value here and call this function in constructor? 
-//TODO put this method in private
 //TODO before restet: catch death of all childs
 void			Job::resetDefault( void )
 {
@@ -479,7 +478,7 @@ void			Job::resetDefault( void )
 	this->_autostart = TM_DEF_AUTOSTART;
 	this->_restartpolicy = TM_DEF_RESTARTPOLICY;
 	this->_nbretrymax = TM_DEF_NBRETRYMAX;
-	this->_exitcode.clear();
+	this->_exitcode = std::vector<uint>(1, TM_DEF_EXITCODE);
 	this->_starttime = TM_DEF_STARTTIME;
 	this->_stoptime = TM_DEF_STOPTIME;
 	this->_stopsignal = TM_DEF_STOPSIGNAL;
@@ -489,15 +488,24 @@ void			Job::resetDefault( void )
 }
 
 //BUG fix here
+// Really?
 bool		Job::hasPid( pid_t pid )
 {
 	return (this->_pid.find(pid) != this->_pid.end());
 }
 
+
 bool		Job::rmPid( pid_t pid )
 {
 	return this->_pid.erase(pid);
 }
+
+
+bool		Job::isSuccessExitCode( uint return_value )
+{
+	return (std::find(this->_exitcode.begin(), this->_exitcode.end(), return_value) != this->_exitcode.end());
+}
+
 
 void						Job::setChildStatus( pid_t pid, child_status status)
 {
@@ -712,6 +720,9 @@ const char*				Job::getStatusString( job_status status ) const
 		case terminated:
 			return "terminated";
 			break;
+		case killed:
+			return "killed";
+			break;
 		default:
 			LOG_CRITICAL(LOG_CATEGORY_JOB, "Invalid status value '" + ntos(this->_restartpolicy) + "' for job '" + this->_name + "'.") 
 //TODO remove all ntos() call in all the code
@@ -747,6 +758,9 @@ const char*				Job::getChildStatusString( child_status status ) const
 		case child_terminated:
 			return "terminated";
 			break;
+		case child_killed:
+			return "killed";
+			break;
 		default:
 			LOG_CRITICAL(LOG_CATEGORY_JOB, "Invalid status value '" + ntos(this->_restartpolicy) + "' for job '" + this->_name + "'.") 
 //TODO remove all ntos() call in all the code
@@ -762,8 +776,6 @@ uint					Job::getNbRetry( void ) const
 //DONE when using the _exitcode for the first time if its empty, populate it with default value
 const std::vector<uint>		&Job::getExitCodes( void ) const
 {
-	if (this->_exitcode.empty())
-		const_cast<Job*>(this)->_exitcode.push_back(TM_DEF_EXITCODE);
 	return this->_exitcode;
 }
 
